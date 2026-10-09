@@ -20,51 +20,79 @@ button:disabled{opacity:.35}
 .num{font-variant-numeric:tabular-nums;font-weight:800;letter-spacing:-.02em}
 .hide{display:none!important}
 
-/* ===== 表示画面 ===== */
-#disp{position:fixed;inset:0;display:grid;grid-template-rows:auto 1fr 1.5fr;gap:1.2vmin;padding:1.5vmin 2vmin;background:var(--bg);transition:background-color .6s}
-/* 「OUTまで」の枠の背景色で今の状態を出す（遠くからでも見分けやすい、はっきりした色。黄・明るい緑の上は黒文字） */
+/* ===== 書体（アプリでも電波なしで出るよう同梱） ===== */
+@font-face{font-family:"DSEG7";src:url(fonts/DSEG7Classic-Bold.woff2) format("woff2");font-weight:700}
+@font-face{font-family:"Barlow C";src:url(fonts/BarlowCondensed-700.woff2) format("woff2");font-weight:700}
+@font-face{font-family:"Barlow C";src:url(fonts/BarlowCondensed-800.woff2) format("woff2");font-weight:800}
+.seg7{font-family:"DSEG7",monospace;font-weight:700;font-style:normal}
+
+/* ===== 表示画面（計時モニター風） ===== */
+#disp{position:fixed;inset:0;display:grid;grid-template-rows:9vmin 1fr 1.5fr;gap:1.4vmin;padding:0 1.6vmin 1.6vmin;
+  background:#050607;background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.018) 0 2px,transparent 2px 6px)}
+#disp.svc{grid-template-rows:9vmin 1fr 1.9fr}      /* サービス中は「OUTまで」を大きく */
+#top{margin:0 -1.6vmin;padding:0 2vmin;display:flex;align-items:center;gap:2vmin;border-bottom:2px solid var(--accent);
+  background:linear-gradient(#121418,#0a0b0d);min-width:0}
+#top .no{font:800 6vmin/1 "Barlow C",sans-serif;background:var(--accent);color:#000;padding:.5vmin 1.6vmin;border-radius:.6vmin}
+#top .no:empty{display:none}
+#top .ttl{font:700 4.4vmin/1 "Barlow C","Noto Sans JP",sans-serif;letter-spacing:.06em;white-space:nowrap}
+#top .sp{flex:1}
+#top .bdg{font:700 2.4vmin/1 "Noto Sans JP",sans-serif;border:1px solid currentColor;border-radius:.5vmin;padding:.5vmin 1vmin;white-space:nowrap}
+#dLink{color:var(--dim)} #dLink.on{color:var(--ok)} #dLink.err{color:var(--bad)}
+#dTime{color:var(--dim)} #dTime.gps{color:var(--ok)}
+#dBat{color:var(--dim)} #dBat.low{color:#fff;background:var(--bad);border-color:var(--bad);animation:blink 1s steps(2) infinite}
+#dClock{font-size:4.2vmin;color:#b8c0c8;white-space:nowrap}
+#io{display:grid;grid-template-columns:1fr 1fr;gap:1.6vmin;min-height:0}
+#io.single{grid-template-columns:1fr}
+.cell{position:relative;min-height:0;border:1px solid #2a2e35;border-radius:1vmin;background:#0b0d10;overflow:hidden}
+.cell .lab{position:absolute;left:2vmin;top:1.2vmin;z-index:1;font:700 3.4vmin/1 "Barlow C","Noto Sans JP",sans-serif;letter-spacing:.1em;color:var(--accent)}
+.box{position:absolute;left:1.5vmin;right:1.5vmin;top:4.6vmin;bottom:1.2vmin}
+.fit{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;white-space:nowrap;line-height:1;color:#eef2f6}
+.fit .sg{position:relative;font-family:"DSEG7",monospace;font-weight:700;text-shadow:0 0 .12em rgba(255,255,255,.18)}
+.fit .gh{position:absolute;left:0;top:0;color:rgba(255,255,255,.06);text-shadow:none}   /* 消えているセグメントを薄く */
+.fit .pl{font:800 .8em/1 "Barlow C",sans-serif;margin-right:.08em}
+/* サービス中の「サービスOUT」はラベル左・数字右の横長 */
+#io.single .cell .lab{top:50%;transform:translateY(-50%);font-size:4.2vmin}
+#io.single .box{left:24vmin;top:1.6vmin;bottom:1.6vmin}
+
+/* 「OUTまで」の枠：背景色で状態を出す（黄は黒文字） */
 #rem{transition:background-color .4s}
+#rem .lab{color:rgba(255,255,255,.85)}
+#rem .box{top:5vmin;bottom:5.4vmin}
+#hint{position:absolute;right:2vmin;top:1.4vmin;font-size:2.4vmin;color:rgba(255,255,255,.55)}
+#prog{position:absolute;left:2vmin;right:2vmin;bottom:2vmin;height:1.6vmin;border-radius:1vmin;background:rgba(0,0,0,.35)}
+#prog i{position:absolute;left:0;top:0;bottom:0;border-radius:1vmin;background:#fff;transition:width .5s linear}
+#prog .tk{position:absolute;top:-.8vmin;bottom:-.8vmin;width:2px;background:rgba(255,255,255,.55)}
+#disp.idle #rem .fit{color:#59616b}
 #disp.pre #rem{background:#1565c0;border-color:#1565c0}
 #disp.run #rem{background:#1b7a3a;border-color:#1b7a3a}
 #disp.warn #rem{background:#ffc400;border-color:#ffc400}
 #disp.bad #rem{background:#e01e1e;border-color:#e01e1e}
-#disp.out #rem{background:#00e05a;border-color:#00e05a}
 #disp.late #rem{background:#e01e1e;border-color:#e01e1e;animation:bgblink 1s steps(2) infinite}
 #disp.wait #rem{background:#ffc400;border-color:#ffc400;animation:bgblink2 1s steps(2) infinite}
 @keyframes bgblink{50%{background:#3a0000}}
 @keyframes bgblink2{50%{background:#5a4500}}
-#disp:not(.idle) #rem .fit{color:#fff;animation:none}
-#disp:not(.idle) #rem .lab,#disp:not(.idle) #rem #hint{color:rgba(255,255,255,.85)}
-#disp.warn #rem .fit,#disp.out #rem .fit,#disp.wait #rem .fit{color:#000}
-#disp.warn #rem .lab,#disp.out #rem .lab,#disp.wait #rem .lab,
-#disp.warn #rem #hint,#disp.out #rem #hint,#disp.wait #rem #hint{color:rgba(0,0,0,.7)}
-#disp.svc{grid-template-rows:auto 1fr 1.9fr}   /* サービス中は「OUTまで」を大きく */   /* サービス中はOUT時刻を残り時間と同じ高さに */
-#top{display:flex;align-items:center;justify-content:space-between;gap:2vmin;font-size:4.2vmin;color:var(--dim)}
-#top .car{color:var(--fg);font-weight:800}
-#top .right{display:flex;gap:2.5vmin;align-items:center}
-#io{display:grid;grid-template-columns:1fr 1fr;gap:2vmin;min-height:0}
-.cell{position:relative;border:2px solid var(--line);border-radius:2vmin;min-height:0;display:flex;flex-direction:column;padding:1vmin 2vmin}
-.cell .lab{font-size:3.6vmin;color:var(--dim);font-weight:700;line-height:1.1}
-.box{flex:1;min-height:0;position:relative;overflow:hidden}
-.fit{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;white-space:nowrap;line-height:1}
-#cellOut .lab{color:var(--accent)}
-#rem{border-width:3px}
-#rem.warn{border-color:var(--warn)} #rem.warn .fit{color:var(--warn)}
-#rem.bad{border-color:var(--bad)} #rem.bad .fit{color:var(--bad)}
-#rem.out{border-color:var(--ok)} #rem.out .fit{color:var(--ok)}
-#rem.late .fit{color:var(--bad);animation:blink 1s steps(2) infinite}
-#rem.idle .fit{color:var(--dim)}
-#rem.pre{border-color:#3d7bd9} #rem.pre .fit{color:#8fc1ff}
-#rem.wait{border-color:var(--warn)} #rem.wait .fit{color:var(--warn);animation:blink 1s steps(2) infinite}
+#disp:not(.idle) #rem .fit{color:#fff}
+#disp:not(.idle) #rem .sg{text-shadow:0 0 .1em rgba(255,255,255,.35)}
+#disp.warn #rem .fit,#disp.wait #rem .fit{color:#000}
+#disp.warn #rem .sg,#disp.wait #rem .sg{text-shadow:none}
+#disp.warn #rem .gh,#disp.wait #rem .gh{color:rgba(0,0,0,.08)}
+#disp.warn #rem .lab,#disp.wait #rem .lab,#disp.warn #hint,#disp.wait #hint{color:rgba(0,0,0,.7)}
+#disp.warn #prog i{background:#000} #disp.warn #prog .tk{background:rgba(0,0,0,.5)}
 #mini.pre .rv{color:#8fc1ff} #mini.wait .rv{color:var(--warn)}
 @keyframes blink{50%{opacity:.35}}
-#hint{position:absolute;right:2vmin;bottom:1.2vmin;font-size:2.6vmin;color:var(--dim)}
-#io.single{grid-template-columns:1fr}
+/* 夜間モード：画面全体を暗く */
+body.night #disp{filter:brightness(.6)}
 @media (orientation:portrait){
-  #disp{grid-template-rows:auto 1fr 1fr 1.6fr}
+  #disp{grid-template-rows:9vmin 1fr 1fr 1.6fr}
   #io{grid-template-columns:1fr;grid-row:2/4}
   #io.single #cellOut{grid-row:1/3}
-  #disp.svc{grid-template-rows:auto .6fr .6fr 2fr}
+  #disp.svc{grid-template-rows:9vmin .7fr .7fr 2fr}
+  #io.single .cell .lab{top:1.2vmin;transform:none;font-size:3.4vmin}
+  #io.single .box{left:1.5vmin;top:4.6vmin}
+  #top .ttl{font-size:3.6vmin}
+  /* 縦向きは幅が狭いので帯の札は電池の警告だけ残す */
+  #dLink,#dTime,#dBat:not(.low){display:none}
+  #top{gap:1.6vmin}
 }
 
 /* ===== 操作パネル（表示端末ではタップで開く／リモコン端末では常に表示） ===== */
@@ -78,8 +106,8 @@ button:disabled{opacity:.35}
 .sel{background:var(--accent);color:#000}
 .danger{background:#4a1d1d;color:#ffb3b3}
 #mini{border:2px solid var(--line);border-radius:14px;padding:10px 14px;display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:6px;align-items:end}
-#mini .k{font-size:13px;color:var(--dim)} #mini .v{font-size:30px}
-#mini .rv{font-size:40px}
+#mini .k{font-size:13px;color:var(--dim)} #mini .v{font-size:24px;font-family:"DSEG7",monospace;margin-top:6px}
+#mini .rv{font-size:32px;font-family:"DSEG7",monospace;margin-top:6px}
 #mini.warn .rv{color:var(--warn)} #mini.bad .rv,#mini.late .rv{color:var(--bad)} #mini.out .rv{color:var(--ok)}
 #link{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;background:var(--panel);font-size:16px}
 #link .dot{width:14px;height:14px;border-radius:50%;background:var(--dim);flex:none}
@@ -113,15 +141,17 @@ button:disabled{opacity:.35}
 <!-- 表示画面 -->
 <div id="disp">
   <div id="top">
-    <div class="car" id="dCar"></div>
-    <div class="right"><span id="dLink"></span><span class="num" id="dClock"></span></div>
+    <span class="no" id="dNo"></span><span class="ttl" id="dTtl"></span><span class="sp"></span>
+    <span class="bdg" id="dLink"></span><span class="bdg" id="dBat"></span><span class="bdg" id="dTime">端末時刻</span>
+    <span class="seg7" id="dClock"></span>
   </div>
   <div id="io">
-    <div class="cell" id="cellIn"><div class="lab" id="dInLab">サービス IN</div><div class="box"><div class="fit num" id="dIn">--:--</div></div></div>
-    <div class="cell" id="cellOut"><div class="lab" id="dOutLab">サービス OUT</div><div class="box"><div class="fit num" id="dOut">--:--</div></div></div>
+    <div class="cell" id="cellIn"><div class="lab" id="dInLab">SERVICE IN</div><div class="box"><div class="fit" id="dIn"></div></div></div>
+    <div class="cell" id="cellOut"><div class="lab" id="dOutLab">SERVICE OUT</div><div class="box"><div class="fit" id="dOut"></div></div></div>
   </div>
-  <div class="cell" id="rem"><div class="lab" id="dRemLab">OUTまで</div><div class="box"><div class="fit num" id="dRem">--:--</div></div>
-    <div id="hint">画面をタップで操作</div></div>
+  <div class="cell" id="rem"><div class="lab" id="dRemLab">OUTまで</div><div class="box"><div class="fit" id="dRem"></div></div>
+    <div id="hint">画面をタップで操作</div>
+    <div id="prog" class="hide"><i></i><span class="tk"></span><span class="tk"></span><span class="tk"></span></div></div>
 </div>
 
 <!-- 操作パネル -->
@@ -175,6 +205,10 @@ button:disabled{opacity:.35}
     <button data-serve="1">ON</button><button data-serve="0">OFF</button></span></div>
   <div class="set"><span>画面の向き</span><span class="opts">
     <button data-ori="any">自動</button><button data-ori="landscape">横</button><button data-ori="portrait">縦</button></span></div>
+  <div class="set" id="setGps"><span>時計をGPS時刻に合わせる<br><span class="note" id="gpsNote"></span></span><span class="opts">
+    <button data-gps="1">ON</button><button data-gps="0">OFF</button></span></div>
+  <div class="set" id="setBright"><span>画面の明るさ</span><span class="opts">
+    <button data-bright="max">最大</button><button data-bright="auto">端末のまま</button><button data-bright="night">夜間</button></span></div>
   <div class="note" id="roleNote"></div>
   <div class="note" id="ver"></div>
 </div>
@@ -205,7 +239,7 @@ button:disabled{opacity:.35}
 
 <script>
 'use strict';
-const VERSION = '0.4.2';
+const VERSION = '0.5.0';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const N = window.ST || null;                 // アプリ版の橋渡し（ブラウザでは無し）
@@ -225,12 +259,17 @@ let role = roleFixed || ls.get('role', 'display');
 let S = Object.assign({car:'', planIn:null, inAt:null, dur:30, adj:0, voice:true}, ls.get('state', {}));
 let serveOn = ls.get('serve', false);
 let ori = ls.get('ori', 'any');
+let gpsUse = ls.get('gps', true);
+let bright = ls.get('bright', 'max');
 let remoteAddr = ls.get('addr', null);
 let link = {state:'idle', detail:''};
 let remoteOff = 0;          // リモコン：表示端末の時計 − この端末の時計
 let lastStateAt = 0;
 
-const now = () => role === 'display' ? Date.now() + S.adj : Date.now() + remoteOff;
+let gps = {off:0, at:0};                         // GPS時刻 − 端末の時計（アプリのみ）
+let bat = {level:null, charging:false};
+const clockNow = () => Date.now() + (gpsUse ? gps.off : 0) + S.adj;   // 表示端末の時計
+const now = () => role === 'display' ? clockNow() : Date.now() + remoteOff;
 const outAt = () => S.inAt == null ? null : S.inAt + S.dur * 60000;
 const pad = n => String(n).padStart(2, '0');
 const hm = t => { const d = new Date(t); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
@@ -265,7 +304,7 @@ function act(cmd){
 }
 
 function apply(cmd){
-  const t = Date.now() + S.adj;
+  const t = clockNow();
   let say = null;
   switch (cmd.c){
     case 'in':
@@ -409,7 +448,7 @@ function send(msg){
   if (isApp) N.btSend(line); else if (bc) bc.postMessage(line);
 }
 function pushState(){
-  if (role === 'display' && serveOn) send({t:'state', s:S, now: Date.now() + S.adj});
+  if (role === 'display' && serveOn) send({t:'state', s:S, now: clockNow(), bat});
 }
 
 window.__btStatus = (state, detail) => { link = {state, detail}; render(); if (role === 'display' && state === 'serving') pushState(); };
@@ -422,12 +461,36 @@ window.__btRecv = line => {
   } else if (m.t === 'state'){
     S = Object.assign(S, m.s);
     remoteOff = m.now - Date.now();
+    if (m.bat) bat = m.bat;
     lastStateAt = Date.now();
     if (!isApp) link = {state:'connected', detail:'ブラウザの別タブ'};
     render(true);
   }
 };
 window.__btPairedReady = () => showDevices();
+
+// GPS時刻（アプリ）：GPS時刻 − 端末の時計(ms)。時計が飛ぶので読み上げの区切りは数え直す
+window.__gpsOffset = ms => {
+  const first = !gps.at;
+  gps = {off: ms, at: Date.now()};
+  if (role === 'display'){ cues.reset(); render(true); if (first) pushState(); }
+};
+// 電池：20%と10%を切った時に1回ずつ読み上げ（充電中は読まない）
+const batLow = () => bat.level != null && bat.level <= 20 && !bat.charging;
+let batSaid = 100;
+window.__battery = (level, charging) => {
+  bat = {level, charging};
+  if (charging) batSaid = 100;
+  else if (role === 'display'){
+    const mark = level <= 10 ? 10 : level <= 20 ? 20 : 100;
+    if (mark < batSaid){ batSaid = mark; speak('この端末の電池が、残り' + level + 'パーセントです。充電してください。', 'urgent'); }
+  }
+  render(true);
+};
+if (!isApp && navigator.getBattery) navigator.getBattery().then(b => {
+  const up = () => window.__battery(Math.round(b.level * 100), b.charging);
+  b.addEventListener('levelchange', up); b.addEventListener('chargingchange', up); up();
+}).catch(() => {});
 if (bc) bc.onmessage = e => window.__btRecv(e.data);
 
 function startLink(){
@@ -461,7 +524,7 @@ function linkText(){
     if (s === 'error') return ['err', d, ''];
     return ['wait', '受付を準備中…', ''];
   }
-  if (s === 'connected') return ['on', '接続中：' + (d || '表示端末'), '変更'];
+  if (s === 'connected') return [batLow() ? 'err' : 'on', '接続中：' + (d || '表示端末') + (batLow() ? '（表示端末の電池 ' + bat.level + '%・要充電）' : ''), '変更'];
   if (s === 'connecting') return ['wait', '接続しています…' + (d ? ' ' + d : ''), isApp ? '変更' : ''];
   if (s === 'retry') return ['wait', '表示端末を探しています（自動で再接続）', '変更'];
   if (s === 'off') return ['err', 'BluetoothがOFFです', '接続'];
@@ -484,23 +547,42 @@ function render(full){
   // 表示画面
   setFit('#dIn', inT == null ? '--:--' : hm(inT));
   setFit('#dOut', outT == null ? '--:--' : hm(outT));
-  $('#dInLab').textContent = inLab; $('#dOutLab').textContent = outLab;
+  $('#dInLab').textContent = planned ? 'SERVICE IN　予定' : 'SERVICE IN';
+  $('#dOutLab').textContent = planned ? 'SERVICE OUT　予定' : 'SERVICE OUT';
   // サービスINを過ぎたらIN欄は消してOUTだけにする（枠の大きさが変わるので数字を測り直す）
   const single = S.inAt != null;
   if ($('#io').classList.contains('single') !== single){
     $('#io').classList.toggle('single', single);
     $('#cellIn').classList.toggle('hide', single);
+    $('#disp').classList.toggle('svc', single);
     requestAnimationFrame(fitAll);
   }
   setFit('#dRem', remTxt);
   $('#dRemLab').textContent = remLab;
   $('#rem').className = 'cell ' + cls;
-  $('#disp').className = (cls || 'run') + (S.inAt != null ? ' svc' : '') + (role === 'remote' ? ' hide' : '');
-  $('#dCar').textContent = (S.car ? 'No.' + S.car + '　' : '') + 'サービス ' + S.dur + '分';
+  $('#disp').className = (cls || 'run') + (single ? ' svc' : '') + (role === 'remote' ? ' hide' : '');
+  $('#dNo').textContent = S.car || '';
+  $('#dTtl').textContent = 'SERVICE　' + S.dur + '分';
   $('#dClock').textContent = hms(t);
+  // 進行バー：サービス時間のうち残りの割合。目盛りは10分・5分・1分前
+  const showProg = single && (ph.p === 'run' || ph.p === 'late');
+  $('#prog').classList.toggle('hide', !showProg);
+  if (showProg){
+    const total = S.dur * 60000, rr = ph.p === 'late' ? 0 : ph.r;
+    $('#prog i').style.width = (Math.max(0, Math.min(1, rr / total)) * 100).toFixed(2) + '%';
+    $$('#prog .tk').forEach((tk, i) => { const m = [10, 5, 1][i]; tk.style.left = (m / S.dur * 100) + '%'; tk.classList.toggle('hide', m >= S.dur); });
+  }
   const [lc] = linkText();
-  $('#dLink').textContent = role === 'display' && serveOn ? (lc === 'on' ? '● リモコン' : lc === 'err' ? '× リモコン' : '○ リモコン') : '';
-  $('#dLink').style.color = lc === 'on' ? 'var(--ok)' : lc === 'err' ? 'var(--bad)' : '';
+  const dl = $('#dLink');
+  dl.classList.toggle('hide', !(role === 'display' && serveOn));
+  dl.textContent = lc === 'on' ? 'リモコン接続' : lc === 'err' ? 'リモコン×' : 'リモコン待ち';
+  dl.className = 'bdg' + (lc === 'on' ? ' on' : lc === 'err' ? ' err' : '') + (role === 'display' && serveOn ? '' : ' hide');
+  const gpsOk = gps.at && Date.now() - gps.at < 3 * 3600000;
+  $('#dTime').textContent = gpsOk ? 'GPS時刻' : '端末時刻';
+  $('#dTime').className = 'bdg' + (gpsOk ? ' gps' : '');
+  const db = $('#dBat');
+  if (bat.level == null) db.classList.add('hide');
+  else { db.className = 'bdg' + (batLow() ? ' low' : ''); db.textContent = (bat.charging ? '充電中 ' : '電池 ') + bat.level + '%'; }
 
   // 操作パネル
   $('#mIn').textContent = inT == null ? '--:--' : hm(inT);
@@ -526,6 +608,11 @@ function render(full){
   $$('[data-role]').forEach(b => b.classList.toggle('sel', b.dataset.role === role));
   $$('[data-serve]').forEach(b => b.classList.toggle('sel', (b.dataset.serve === '1') === serveOn));
   $$('[data-ori]').forEach(b => b.classList.toggle('sel', b.dataset.ori === ori));
+  $$('[data-gps]').forEach(b => b.classList.toggle('sel', (b.dataset.gps === '1') === gpsUse));
+  $$('[data-bright]').forEach(b => b.classList.toggle('sel', b.dataset.bright === bright));
+  $('#setGps').classList.toggle('hide', role !== 'display');
+  $('#gpsNote').textContent = !isApp ? 'アプリ版のみ（Web版は端末の時計）'
+    : !gpsUse ? '端末の時計を使用中' : gps.at ? '合わせ済み（端末とのずれ ' + (gps.off / 1000).toFixed(1) + '秒）' : 'GPSを受信中…（屋外で数十秒）';
   $('#setServe').classList.toggle('hide', role !== 'display');
   $('#ctlClose').classList.toggle('hide', role !== 'display');
   $('#mini').classList.toggle('hide', role === 'display');
@@ -538,21 +625,23 @@ function render(full){
 /** 枠いっぱいに数字を出す（文字数が変わった時と画面サイズが変わった時だけ測り直す） */
 function setFit(sel, txt){
   const el = $(sel);
-  if (el.textContent !== txt){
-    const relen = el.textContent.length !== txt.length;
-    el.textContent = txt;
-    if (relen) fit(el);
-  }
+  if (el.dataset.t === txt) return;
+  const relen = (el.dataset.t || '').length !== txt.length;
+  el.dataset.t = txt;
+  const plus = txt[0] === '+', d = plus ? txt.slice(1) : txt;
+  const ghost = d.replace(/[0-9-]/g, '8');
+  el.innerHTML = (plus ? '<span class="pl">+</span>' : '') + '<span class="sg"><span class="gh">' + ghost + '</span>' + d + '</span>';
+  if (relen) fit(el);
 }
 function fit(el){
   const box = el.parentElement, h = box.clientHeight, w = box.clientWidth;
   if (!h || !w) return;
-  let fs = h * 0.92;
+  let fs = h * 0.96;
   el.style.fontSize = fs + 'px';
   // 中央寄せだと左へのはみ出しが scrollWidth に出ないので、文字そのものの幅を測る
   const r = document.createRange(); r.selectNodeContents(el);
   const sw = r.getBoundingClientRect().width;
-  if (sw > w * 0.96) fs = fs * (w * 0.96) / sw;
+  if (sw > w * 0.97) fs = fs * (w * 0.97) / sw;
   el.style.fontSize = Math.floor(fs) + 'px';
 }
 function fitAll(){ $$('.fit').forEach(fit); }
@@ -677,6 +766,7 @@ $$('[data-role]').forEach(b => b.onclick = () => {
   cues.reset();
   if (role === 'display') S = Object.assign({car:'', planIn:null, inAt:null, dur:30, adj:0, voice:true}, ls.get('state', {}));
   startLink();
+  applyGps();
   showCtl(role === 'display');
   if (role === 'remote' && isApp && !remoteAddr) showDevices();
 });
@@ -685,6 +775,15 @@ $$('[data-serve]').forEach(b => b.onclick = () => {
   startLink(); render(true);
 });
 $$('[data-ori]').forEach(b => b.onclick = () => { ori = b.dataset.ori; ls.set('ori', ori); applyOri(); render(true); });
+$$('[data-gps]').forEach(b => b.onclick = () => { gpsUse = b.dataset.gps === '1'; ls.set('gps', gpsUse); applyGps(); cues.reset(); render(true); pushState(); });
+$$('[data-bright]').forEach(b => b.onclick = () => { bright = b.dataset.bright; ls.set('bright', bright); applyBright(); render(true); });
+/** GPS時刻の受信は「表示する端末」でONの時だけ（リモコンは表示端末の時計に合わせる） */
+function applyGps(){ if (isApp) N.gpsClock(role === 'display' && gpsUse); }
+/** 明るさ：最大＝屋外向け／端末のまま／夜間＝暗くして画面も落ち着いた色に */
+function applyBright(){
+  document.body.classList.toggle('night', bright === 'night');
+  if (isApp) N.setBrightness(bright === 'max' ? 1 : bright === 'night' ? 0.15 : -1);
+}
 function applyOri(){
   if (isApp) N.setOrientation(ori);
   else if (screen.orientation && screen.orientation.lock && ori !== 'any') screen.orientation.lock(ori).catch(() => {});
@@ -701,6 +800,8 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 $('#ver').textContent = 'サービスタイマー ' + VERSION + (isApp ? '（アプリ ' + N.version() + '）' : '（Web版）') + '　SERAPHIX';
 window.addEventListener('resize', () => { fitAll(); });
 applyOri();
+applyBright();
+applyGps();
 keepAwake();
 startLink();
 showCtl(false);
