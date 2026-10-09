@@ -254,7 +254,7 @@ body.night #disp{filter:brightness(.6)}
 
 <script>
 'use strict';
-const VERSION = '0.7.1';
+const VERSION = '0.7.2';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const N = window.ST || null;                 // アプリ版の橋渡し（ブラウザでは無し）
@@ -685,7 +685,7 @@ function linkText(){
 function render(full){
   const t = now(), ph = phase(t), o = outAt();
   const remTxt = ph.p === 'idle' ? '--:--' : (ph.p === 'late' || ph.p === 'wait') ? '+' + dur(ph.r) : dur(ph.r);
-  const remLab = {idle:'IN予定を入れてください', pre:'サービスINまで', wait:'IN予定を過ぎています（到着したらIN）',
+  const remLab = {idle:'IN予定待ち', pre:'サービスINまで', wait:'IN予定を過ぎています（到着したらIN）',
     run:'SERVICE OUTまで', late:'超過'}[ph.p];
   const cls = ph.p === 'idle' ? 'idle' : ph.p === 'pre' ? 'pre' : ph.p === 'wait' ? 'wait' : ph.p === 'out' ? 'out' : ph.p === 'late' ? 'late'
     : ph.r <= 60000 ? 'bad' : ph.r <= 300000 ? 'warn' : '';
