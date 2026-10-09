@@ -60,11 +60,7 @@ button:disabled{opacity:.35}
 #prog .tk{position:absolute;top:-.8vmin;bottom:-.8vmin;width:2px;background:rgba(255,255,255,.55)}
 #disp.idle #rem .fit{color:#59616b}
 #disp.pre #rem{background:#1565c0;border-color:#1565c0}
-/* サービス中（黄色になる前）はラリコンのSSモードの緑（#00e676）を背景に。明るい緑なので文字は黒 */
-#disp.run #rem{background:#00e676;border-color:#00e676}
-#disp.run #rem .fit{color:#000!important}
-#disp.run #rem .lab,#disp.run #hint{color:rgba(0,0,0,.7)!important}
-#disp.run #prog{background:rgba(0,0,0,.18)} #disp.run #prog i{background:#000} #disp.run #prog .tk{background:rgba(0,0,0,.5)}
+#disp.run #rem{background:#1b7a3a;border-color:#1b7a3a}
 #disp.warn #rem{background:#ffc400;border-color:#ffc400}
 #disp.bad #rem{background:#e01e1e;border-color:#e01e1e}
 #disp.late #rem{background:#e01e1e;border-color:#e01e1e;animation:bgblink 1s steps(2) infinite}
@@ -236,7 +232,7 @@ body.night #disp{filter:brightness(.6)}
 
 <script>
 'use strict';
-const VERSION = '0.5.3';
+const VERSION = '0.5.4';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const N = window.ST || null;                 // アプリ版の橋渡し（ブラウザでは無し）
