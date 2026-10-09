@@ -52,15 +52,19 @@ button:disabled{opacity:.35}
 
 /* 「OUTまで」の枠：背景色で状態を出す（黄は黒文字） */
 #rem{transition:background-color .4s}
-#rem .lab{color:rgba(255,255,255,.85)}
-#rem .box{top:5vmin;bottom:5.4vmin}
+#rem .lab{color:rgba(255,255,255,.9);font-size:5.2vmin;top:1.4vmin}
+#rem .box{top:7vmin;bottom:5.4vmin}
 #hint{position:absolute;right:2vmin;top:1.4vmin;font-size:2.4vmin;color:rgba(255,255,255,.55)}
 #prog{position:absolute;left:2vmin;right:2vmin;bottom:2vmin;height:1.6vmin;border-radius:1vmin;background:rgba(0,0,0,.35)}
 #prog i{position:absolute;left:0;top:0;bottom:0;border-radius:1vmin;background:#fff;transition:width .5s linear}
 #prog .tk{position:absolute;top:-.8vmin;bottom:-.8vmin;width:2px;background:rgba(255,255,255,.55)}
 #disp.idle #rem .fit{color:#59616b}
 #disp.pre #rem{background:#1565c0;border-color:#1565c0}
-#disp.run #rem{background:#1b7a3a;border-color:#1b7a3a}
+/* サービス中（黄色になる前）はラリコンのSSモードの緑（#00e676）を背景に。明るい緑なので文字は黒 */
+#disp.run #rem{background:#00e676;border-color:#00e676}
+#disp.run #rem .fit{color:#000!important}
+#disp.run #rem .lab,#disp.run #hint{color:rgba(0,0,0,.7)!important}
+#disp.run #prog{background:rgba(0,0,0,.18)} #disp.run #prog i{background:#000} #disp.run #prog .tk{background:rgba(0,0,0,.5)}
 #disp.warn #rem{background:#ffc400;border-color:#ffc400}
 #disp.bad #rem{background:#e01e1e;border-color:#e01e1e}
 #disp.late #rem{background:#e01e1e;border-color:#e01e1e;animation:bgblink 1s steps(2) infinite}
@@ -232,7 +236,7 @@ body.night #disp{filter:brightness(.6)}
 
 <script>
 'use strict';
-const VERSION = '0.5.2';
+const VERSION = '0.5.3';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const N = window.ST || null;                 // アプリ版の橋渡し（ブラウザでは無し）
