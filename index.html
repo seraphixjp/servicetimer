@@ -21,7 +21,17 @@ button:disabled{opacity:.35}
 .hide{display:none!important}
 
 /* ===== 表示画面 ===== */
-#disp{position:fixed;inset:0;display:grid;grid-template-rows:auto 1fr 1.5fr;gap:1.2vmin;padding:1.5vmin 2vmin}
+#disp{position:fixed;inset:0;display:grid;grid-template-rows:auto 1fr 1.5fr;gap:1.2vmin;padding:1.5vmin 2vmin;background:var(--bg);transition:background-color .6s}
+/* 「サービスOUT」の枠の中だけ背景色で今の状態を出す（遠くからでも見える） */
+#cellOut{transition:background-color .6s}
+#disp.run #cellOut{background:#0d2b1c} #disp.warn #cellOut{background:#5a3d00} #disp.bad #cellOut{background:#6b0f0f}
+#disp.out #cellOut{background:#0b6b33} #disp.late #cellOut{background:#8a1010;animation:bgblink 1s steps(2) infinite}
+@keyframes bgblink{50%{background:#2a0505}}
+#disp.svc #cellOut{border-color:rgba(255,255,255,.25)}
+#disp.svc #cellOut .lab{color:rgba(255,255,255,.8)}
+#disp.svc #rem .fit{color:#fff;animation:none}
+#disp.svc #rem{border-color:var(--line)}
+#disp.svc{grid-template-rows:auto 1fr 1fr}   /* サービス中はOUT時刻を残り時間と同じ高さに */
 #top{display:flex;align-items:center;justify-content:space-between;gap:2vmin;font-size:4.2vmin;color:var(--dim)}
 #top .car{color:var(--fg);font-weight:800}
 #top .right{display:flex;gap:2.5vmin;align-items:center}
@@ -47,6 +57,7 @@ button:disabled{opacity:.35}
   #disp{grid-template-rows:auto 1fr 1fr 1.6fr}
   #io{grid-template-columns:1fr;grid-row:2/4}
   #io.single #cellOut{grid-row:1/3}
+  #disp.svc{grid-template-rows:auto 1fr 1fr 1.2fr}
 }
 
 /* ===== 操作パネル（表示端末ではタップで開く／リモコン端末では常に表示） ===== */
@@ -138,7 +149,7 @@ button:disabled{opacity:.35}
     <div class="row">
       <button class="mid" id="bCar">ゼッケン</button>
       <button class="mid" id="bVoice"></button>
-      <button class="mid" id="bTest">読み上げテスト</button>
+      <button class="mid" id="bTest">音のテスト</button>
     </div>
 
     <h2>時計の補正（オフィシャルの時計に合わせる）</h2>
@@ -187,7 +198,7 @@ button:disabled{opacity:.35}
 
 <script>
 'use strict';
-const VERSION = '0.3.1';
+const VERSION = '0.4.0';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const N = window.ST || null;                 // アプリ版の橋渡し（ブラウザでは無し）
@@ -264,11 +275,16 @@ function apply(cmd){
     case 'voice': S.voice = cmd.v; if (cmd.v) say = '読み上げをオンにしました。'; break;
     case 'adj': S.adj += cmd.v; break;
     case 'reset': S.inAt = null; S.planIn = null; S.inAuto = false; say = 'リセットしました。'; break;
-    case 'test': say = '読み上げのテストです。アウトまで、あと5分です。'; break;
+    case 'test': {   // 押すたびに音を順番に試す
+      const T = [['info','お知らせの音です。サービスインまで、あと5分です。'],['in','サービスインの音です。サービスインです。'],
+        ['urgent','アウト10分前からの音です。アウトまで、あと5分です。'],['tick','3'],['out','アウトの時間です。']];
+      const [snd, txt] = T[testIdx++ % T.length];
+      speak(txt, snd); break;
+    }
   }
   ls.set('state', S);
   cues.reset();
-  if (say && (S.voice || cmd.c === 'test' || cmd.c === 'voice')) speak(say, true);
+  if (say && (S.voice || cmd.c === 'voice')) speak(say, cmd.c === 'in' || cmd.c === 'inAt' ? 'in' : 'info');
   render(true);
   pushState();
 }
@@ -291,7 +307,7 @@ function autoIn(t, quiet){
   if (!quiet){
     ls.set('state', S);
     cues.reset();
-    if (S.voice) speak('サービスインです。アウトは、' + jt(outAt()) + 'です。', true);
+    if (S.voice) speak('サービスインです。アウトは、' + jt(outAt()) + 'です。', 'in');
     render(true);
     pushState();
   }
@@ -308,7 +324,7 @@ const cues = {
   /** 区切りをまたいだ瞬間だけ読む（起動直後や設定変更直後は今の位置から数え始める） */
   tick(t){
     const ph = phase(t);
-    let key = null, text = null, chime = false;
+    let key = null, text = null, chime = null;
     if (ph.p === 'run' || ph.p === 'pre'){
       // 残り秒数が区切り（T秒）以下になった時にTを読む。区切り＝10分より上は5分ごと・10/5/3/2/1分・30秒・10〜1秒
       const s = Math.ceil(ph.r / 1000);
@@ -319,23 +335,24 @@ const cues = {
       else {
         key = ph.p + T;
         text = T >= 60 ? head + T / 60 + '分です。' : T === 30 ? head + '30秒です。' : String(T);
-        chime = T >= 30;            // 分・30秒のお知らせはチャイム付き、秒読みは数字だけ
+        // 音：IN前と10分より前は「ピンポン」、OUT10分前からは「ピピピッ」、最後の10秒は「ピッ」＋数字
+        chime = ph.p === 'pre' || T > 600 ? 'info' : T >= 30 ? 'urgent' : 'tick';
       }
     }
-    else if (ph.p === 'wait'){ key = 'wait'; text = 'サービスインの予定時刻になりました。'; chime = true; } else if (ph.p === 'out'){ key = 'out'; text = 'アウトの時間です。'; chime = true; }
-    else if (ph.p === 'late'){ const m = Math.floor(ph.r / 60000) + 1; key = 'late' + m; text = 'アウトの時間から、' + m + '分遅れています。'; chime = true; }
+    else if (ph.p === 'wait'){ key = 'wait'; text = 'サービスインの予定時刻になりました。'; chime = 'in'; } else if (ph.p === 'out'){ key = 'out'; text = 'アウトの時間です。'; chime = 'out'; }
+    else if (ph.p === 'late'){ const m = Math.floor(ph.r / 60000) + 1; key = 'late' + m; text = 'アウトの時間から、' + m + '分遅れています。'; chime = 'urgent'; }
     if (this.last === null){ this.last = key; return; }
     if (key !== this.last){ this.last = key; if (text && S.voice) speak(text, chime); }
   }
 };
 
-/** 読み上げ。chime=true なら「ピンポン」を鳴らしてから読む */
-let speakTimer = null, actx = null;
-function speak(text, chime){
+/** 読み上げ。sound（info/in/urgent/tick/out）を鳴らしてから読む。無しなら読むだけ */
+let speakTimer = null, actx = null, testIdx = 0;
+function speak(text, sound){
   clearTimeout(speakTimer);
-  if (!chime){ say(text); return; }
-  ding();
-  speakTimer = setTimeout(() => say(text), 750);
+  if (!sound){ say(text); return; }
+  const wait = playSound(sound);
+  speakTimer = setTimeout(() => say(text), wait);
 }
 function say(text){
   if (isApp) { N.speak(text); return; }
@@ -350,20 +367,31 @@ function bestVoice(){
   const vs = speechSynthesis.getVoices().filter(v => /^ja/i.test(v.lang));
   return vs.find(v => /natural|online|google/i.test(v.name)) || vs[0] || null;
 }
-/** 2音のチャイム（ピン↑ポン↓） */
-function ding(){
+/** 効果音。[周波数, 開始秒, 長さ秒, 波形] の並び。戻り値＝読み上げを始めるまでの待ち(ms) */
+const SOUNDS = {
+  info:   {notes:[[880,0,.6,'sine'],[698.5,.28,.7,'sine']], wait:750},                         // ピンポン（お知らせ）
+  in:     {notes:[[523,0,.25,'triangle'],[659,.15,.25,'triangle'],[784,.30,.25,'triangle'],[1047,.45,.7,'triangle']], wait:1100}, // サービスイン（上がる4音）
+  urgent: {notes:[[1320,0,.12,'square'],[1320,.16,.12,'square'],[1320,.32,.18,'square']], wait:600},  // ピピピッ（OUT10分前から）
+  tick:   {notes:[[1000,0,.07,'square']], wait:120},                                            // ピッ（秒読み）
+  out:    {notes:[[1568,0,1.0,'square']], wait:1150},                                           // ピー（OUTの時間）
+};
+function playSound(name){
+  const snd = SOUNDS[name] || SOUNDS.info;
   try {
     actx = actx || new (window.AudioContext || window.webkitAudioContext)();
     if (actx.state === 'suspended') actx.resume();
-    [[880, 0], [698.5, 0.28]].forEach(([f, at]) => {
+    snd.notes.forEach(([f, at, len, type]) => {
       const o = actx.createOscillator(), g = actx.createGain(), t0 = actx.currentTime + at;
-      o.type = 'sine'; o.frequency.value = f;
+      const vol = type === 'square' ? 0.18 : 0.5;     // 矩形波は耳に刺さるので小さめ
+      o.type = type; o.frequency.value = f;
       g.gain.setValueAtTime(0.0001, t0);
-      g.gain.exponentialRampToValueAtTime(0.5, t0 + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.6);
-      o.connect(g).connect(actx.destination); o.start(t0); o.stop(t0 + 0.65);
+      g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01);
+      g.gain.setValueAtTime(vol, t0 + Math.max(0.02, len - 0.08));
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + len);
+      o.connect(g).connect(actx.destination); o.start(t0); o.stop(t0 + len + 0.05);
     });
   } catch(e) {}
+  return snd.wait;
 }
 function vib(ms){ if (isApp) N.vibrate(ms); else if (navigator.vibrate) navigator.vibrate(ms); }
 
@@ -461,6 +489,7 @@ function render(full){
   setFit('#dRem', remTxt);
   $('#dRemLab').textContent = remLab;
   $('#rem').className = 'cell ' + cls;
+  $('#disp').className = (cls || 'run') + (S.inAt != null ? ' svc' : '') + (role === 'remote' ? ' hide' : '');
   $('#dCar').textContent = (S.car ? 'No.' + S.car + '　' : '') + 'サービス ' + S.dur + '分';
   $('#dClock').textContent = hms(t);
   const [lc] = linkText();
