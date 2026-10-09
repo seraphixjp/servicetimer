@@ -56,6 +56,17 @@ button:disabled{opacity:.35}
 #rem .lab{color:#fff;font-size:8vmin;top:1.4vmin}
 #rem .box{top:10vmin;bottom:5.4vmin}
 #hint{position:absolute;right:2vmin;top:1.4vmin;font-size:2.4vmin;color:rgba(255,255,255,.55)}
+/* OUTを過ぎたら下の枠に「サービス作業完了」ボタン */
+#bDone{position:absolute;left:3vmin;right:3vmin;bottom:2.4vmin;height:15vmin;border-radius:1.4vmin;background:#fff;color:#c00;
+  font:900 7.5vmin/1 "Noto Sans JP",system-ui,sans-serif;box-shadow:0 .6vmin 0 rgba(0,0,0,.35);z-index:2}
+#rem.has-done .box{bottom:19vmin}
+/* お疲れさまでした */
+#fin{position:fixed;inset:0;z-index:5;background:#050607;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3vmin;text-align:center}
+#fin .t1{font:900 13vmin/1.1 "Noto Sans JP",system-ui,sans-serif;color:#fff}
+#fin .t2{font:700 5vmin/1.2 "Barlow C","Noto Sans JP",sans-serif;color:var(--accent);letter-spacing:.08em}
+#fin .bar{width:60vmin;height:1.2vmin;border-radius:1vmin;background:#222;overflow:hidden}
+#fin .bar i{display:block;height:100%;background:var(--accent);animation:finbar 5s linear forwards}
+@keyframes finbar{from{width:100%}to{width:0}}
 #prog{position:absolute;left:2vmin;right:2vmin;bottom:2vmin;height:1.6vmin;border-radius:1vmin;background:rgba(0,0,0,.35)}
 #prog i{position:absolute;left:0;top:0;bottom:0;border-radius:1vmin;background:#fff;transition:width .5s linear}
 #prog .tk{position:absolute;top:-.8vmin;bottom:-.8vmin;width:2px;background:rgba(255,255,255,.55)}
@@ -145,7 +156,9 @@ body.night #disp{filter:brightness(.6)}
   </div>
   <div class="cell" id="rem"><div class="lab" id="dRemLab">OUTまで</div><div class="box"><div class="fit" id="dRem"></div></div>
     <div id="hint">画面をタップで操作</div>
-    <div id="prog" class="hide"><i></i><span class="tk"></span><span class="tk"></span><span class="tk"></span></div></div>
+    <div id="prog" class="hide"><i></i><span class="tk"></span><span class="tk"></span><span class="tk"></span></div>
+    <button id="bDone" class="hide">サービス作業完了</button></div>
+  <div id="fin" class="hide"><div class="t1">お疲れさまでした</div><div class="t2">SERVICE COMPLETE</div><div class="bar"><i></i></div></div>
 </div>
 
 <!-- 操作パネル -->
@@ -160,6 +173,7 @@ body.night #disp{filter:brightness(.6)}
 
   <div id="ops">
     <h2>IN予定（この時刻になると自動でサービスINに切り替わる）</h2>
+    <button class="big danger hide" id="bDone2" style="width:100%;background:#fff;color:#c00;margin-bottom:12px">サービス作業完了</button>
     <button class="big go" id="bPlanKey" style="width:100%">IN予定を入力</button>
     <div class="row" style="margin-top:10px">
       <button class="mid" data-cmd='{"c":"planAdj","v":-1}'>予定 −1分</button>
@@ -201,6 +215,8 @@ body.night #disp{filter:brightness(.6)}
     <button data-ori="any">自動</button><button data-ori="landscape">横</button><button data-ori="portrait">縦</button></span></div>
   <div class="set" id="setGps"><span>時計をGPS時刻に合わせる<br><span class="note" id="gpsNote"></span></span><span class="opts">
     <button data-gps="1">ON</button><button data-gps="0">OFF</button></span></div>
+  <div class="set"><span>読み上げの声<br><span class="note" id="voiceNote"></span></span><span class="opts">
+    <span id="voiceOpts"></span><button data-voice="tts">端末の音声</button></span></div>
   <div class="set" id="setBright"><span>画面の明るさ</span><span class="opts">
     <button data-bright="max">最大</button><button data-bright="auto">端末のまま</button><button data-bright="night">夜間</button></span></div>
   <div class="note" id="roleNote"></div>
@@ -233,7 +249,7 @@ body.night #disp{filter:brightness(.6)}
 
 <script>
 'use strict';
-const VERSION = '0.5.6';
+const VERSION = '0.6.1';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const N = window.ST || null;                 // アプリ版の橋渡し（ブラウザでは無し）
@@ -255,6 +271,7 @@ let serveOn = ls.get('serve', false);
 let ori = ls.get('ori', 'any');
 let gpsUse = ls.get('gps', true);
 let bright = ls.get('bright', 'max');
+let voiceSel = ls.get('voice', null);     // 声のID（VOICEVOXの話者ID）／'tts'＝端末の音声
 let remoteAddr = ls.get('addr', null);
 let link = {state:'idle', detail:''};
 let remoteOff = 0;          // リモコン：表示端末の時計 − この端末の時計
@@ -309,14 +326,16 @@ function apply(cmd){
     case 'planAt': S.planIn = atToday(t, cmd.h, cmd.m); if (S.inAuto) S.inAt = null; say = autoIn(t, true) ? inOutSpeech() : planSpeech(); break;
     case 'planAdj': if (S.planIn != null){ S.planIn += cmd.v * 60000; if (S.inAuto) S.inAt = null; say = autoIn(t, true) ? inOutSpeech() : planSpeech(); } break;
     case 'inAdj': if (S.inAt != null){ S.inAt += cmd.v * 60000; S.inAuto = false; say = inOutSpeech(); } break;
-    case 'dur': S.dur = cmd.v; say = S.inAt != null ? inOutSpeech() : 'サービス時間は' + cmd.v + '分です。'; break;
+    case 'dur': S.dur = cmd.v; say = S.inAt != null ? inOutSpeech() : 'サービス時間は、' + cmd.v + '分です。'; break;
     case 'car': S.car = cmd.v; break;
     case 'voice': S.voice = cmd.v; if (cmd.v) say = '読み上げをオンにしました。'; break;
     case 'adj': S.adj += cmd.v; break;
     case 'reset': S.inAt = null; S.planIn = null; S.inAuto = false; say = 'リセットしました。'; break;
+    // サービス作業完了：お疲れさまでしたを出して、最初の画面（IN予定待ち）に戻す
+    case 'done': S.inAt = null; S.planIn = null; S.inAuto = false; S.doneAt = t; say = 'お疲れさまでした。'; break;
     case 'test': {   // 押すたびに音を順番に試す
-      const T = [['info','お知らせの音です。サービスインまで、あと5分です。'],['in','サービスインの音です。サービスインです。'],
-        ['urgent','アウト10分前からの音です。アウトまで、あと5分です。'],['tick','3'],['out','アウトの時間です。']];
+      const T = [['info','サービスインまで、あと5分です。'],['in',['サービスインです。アウトは、', ...jt(t + 30 * 60000)]],
+        ['urgent','アウトまで、あと5分です。'],['tick','3'],['out','アウトの時間です。']];
       const [snd, txt] = T[testIdx++ % T.length];
       speak(txt, snd); break;
     }
@@ -336,9 +355,9 @@ function atToday(t, h, m){
   if (t - v > 12 * 3600000) v += 86400000;
   return v;
 }
-/** 読み上げ用の時刻「9時30分」「10時ちょうど」 */
-function jt(ms){ const d = new Date(ms); return d.getHours() + '時' + (d.getMinutes() ? d.getMinutes() + '分' : 'ちょうど'); }
-function planSpeech(){ return 'サービスインの予定は、' + jt(S.planIn) + 'です。'; }
+/** 読み上げ用の時刻を部品で：「18時」＋「12分です。」／「10時」＋「ちょうどです。」（録音した音声をつなげるため） */
+function jt(ms){ const d = new Date(ms); return [d.getHours() + '時', d.getMinutes() ? d.getMinutes() + '分です。' : 'ちょうどです。']; }
+function planSpeech(){ return ['サービスインの予定は、', ...jt(S.planIn)]; }
 /** IN予定の時刻になったら自動でサービスIN（表示端末だけが行う）。quiet＝読み上げない */
 function autoIn(t, quiet){
   if (S.inAt != null || S.planIn == null || t < S.planIn) return false;
@@ -346,13 +365,13 @@ function autoIn(t, quiet){
   if (!quiet){
     ls.set('state', S);
     cues.reset();
-    if (S.voice) speak('サービスインです。アウトは、' + jt(outAt()) + 'です。', 'in');
+    if (S.voice) speak(inOutSpeech(), 'in');
     render(true);
     pushState();
   }
   return true;
 }
-function inOutSpeech(){ return 'サービスイン、' + jt(S.inAt) + '。アウトは、' + jt(outAt()) + 'です。'; }
+function inOutSpeech(){ return ['サービスインです。アウトは、', ...jt(outAt())]; }
 
 // ---------------- 読み上げ ----------------
 const MARKS = [1,2,3,4,5,6,7,8,9,10,30,60,120,180,300,600];
@@ -385,15 +404,69 @@ const cues = {
   }
 };
 
-/** 読み上げ。sound（info/in/urgent/tick/out）を鳴らしてから読む。無しなら読むだけ */
-let speakTimer = null, actx = null, testIdx = 0;
-function speak(text, sound){
+/**
+ * 読み上げ。parts＝文（文字列）または部品の配列。sound（info/in/urgent/tick/out）を鳴らしてから読む。
+ * 部品がすべて録音済み（VOICEVOX、voice/）ならそれをつなげて鳴らし、1つでも無ければ端末の音声で読む。
+ */
+let speakTimer = null, actx = null, testIdx = 0, voiceSrcs = [];
+function speak(parts, sound){
   clearTimeout(speakTimer);
-  if (!sound){ say(text); return; }
+  const list = Array.isArray(parts) ? parts : [parts];
+  const go = () => playVoice(list) || say(list.join(''));
+  if (!sound){ go(); return; }
   const wait = playSound(sound);
-  speakTimer = setTimeout(() => say(text), wait);
+  speakTimer = setTimeout(go, wait);
+}
+
+// ---------- 録音した音声（VOICEVOX） ----------
+const VOICE = {packs:[], map:{}, buf:{}, id:null, ready:false};
+/** 声の一覧を読み、選んでいる声の音声を全部先に読み込む（1つ数KB・200個ほど） */
+async function loadVoice(){
+  try {
+    if (!VOICE.packs.length){
+      VOICE.packs = await (await fetch('voice/packs.json')).json();
+      $('#voiceOpts').innerHTML = VOICE.packs.map(p => `<button data-voice="${p.id}">${p.label}</button>`).join('');
+      $$('[data-voice]').forEach(b => b.onclick = () => { voiceSel = b.dataset.voice; ls.set('voice', voiceSel); loadVoice(); render(true); });
+    }
+    if (voiceSel == null || (voiceSel !== 'tts' && !VOICE.packs.some(p => p.id === voiceSel))) voiceSel = VOICE.packs[0].id;
+    if (voiceSel === 'tts' || VOICE.id === voiceSel){ render(true); return; }
+    const id = voiceSel;
+    VOICE.ready = false; VOICE.map = {}; VOICE.buf = {};
+    const j = await (await fetch('voice/' + id + '/phrases.json')).json();
+    ac();
+    const map = {}, buf = {};
+    await Promise.all(j.phrases.map(async p => {
+      map[p.key] = p.id;
+      try { buf[p.id] = await actx.decodeAudioData(await (await fetch('voice/' + id + '/' + p.id + '.mp3')).arrayBuffer()); } catch(e) {}
+    }));
+    if (voiceSel !== id) return;          // 読み込み中に別の声へ切り替えた
+    Object.assign(VOICE, {map, buf, id, ready:true});
+    render(true);
+  } catch(e) { render(true); }
+}
+function ac(){
+  actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+  if (actx.state === 'suspended') actx.resume();
+  return actx;
+}
+function stopVoice(){ voiceSrcs.forEach(n => { try { n.stop(); } catch(e) {} }); voiceSrcs = []; }
+/** 部品を隙間なくつなげて鳴らす。鳴らせたら true */
+function playVoice(list){
+  if (!VOICE.ready || voiceSel === 'tts' || VOICE.id !== voiceSel) return false;
+  const bufs = list.map(k => VOICE.buf[VOICE.map[k]]);
+  if (bufs.some(b => !b)) return false;
+  stopVoice();
+  ac();
+  let t = actx.currentTime + 0.02;
+  voiceSrcs = bufs.map(b => {
+    const n = actx.createBufferSource();
+    n.buffer = b; n.connect(actx.destination); n.start(t); t += b.duration;
+    return n;
+  });
+  return true;
 }
 function say(text){
+  stopVoice();
   if (isApp) { N.speak(text); return; }
   if (!('speechSynthesis' in window)) return;
   speechSynthesis.cancel();
@@ -417,8 +490,7 @@ const SOUNDS = {
 function playSound(name){
   const snd = SOUNDS[name] || SOUNDS.info;
   try {
-    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-    if (actx.state === 'suspended') actx.resume();
+    ac();
     snd.notes.forEach(([f, at, len, type]) => {
       const o = actx.createOscillator(), g = actx.createGain(), t0 = actx.currentTime + at;
       const vol = type === 'square' ? 0.18 : 0.5;     // 矩形波は耳に刺さるので小さめ
@@ -477,7 +549,7 @@ window.__battery = (level, charging) => {
   if (charging) batSaid = 100;
   else if (role === 'display'){
     const mark = level <= 10 ? 10 : level <= 20 ? 20 : 100;
-    if (mark < batSaid){ batSaid = mark; speak('この端末の電池が、残り' + level + 'パーセントです。充電してください。', 'urgent'); }
+    if (mark < batSaid){ batSaid = mark; speak('この端末の電池が、残り' + mark + 'パーセントです。充電してください。', 'urgent'); }
   }
   render(true);
 };
@@ -530,7 +602,7 @@ function render(full){
   const t = now(), ph = phase(t), o = outAt();
   const remTxt = ph.p === 'idle' ? '--:--' : (ph.p === 'late' || ph.p === 'wait') ? '+' + dur(ph.r) : dur(ph.r);
   const remLab = {idle:'IN予定を入れてください', pre:'サービスINまで', wait:'IN予定を過ぎています（到着したらIN）',
-    run:'OUTまで', late:'超過'}[ph.p];
+    run:'SERVICE OUTまで', late:'超過'}[ph.p];
   const cls = ph.p === 'idle' ? 'idle' : ph.p === 'pre' ? 'pre' : ph.p === 'wait' ? 'wait' : ph.p === 'out' ? 'out' : ph.p === 'late' ? 'late'
     : ph.r <= 60000 ? 'bad' : ph.r <= 300000 ? 'warn' : '';
   // IN前は予定のIN・OUT（予定IN＋サービス時間）を出す
@@ -559,7 +631,16 @@ function render(full){
   $('#dTtl').textContent = 'SERVICE　' + S.dur + '分';
   $('#dClock').textContent = hms(t);
   // 進行バー：サービス時間のうち残りの割合。目盛りは10分・5分・1分前
-  const showProg = single && (ph.p === 'run' || ph.p === 'late');
+  const showDone = single && ph.p === 'late';
+  if ($('#bDone').classList.contains('hide') === showDone){
+    $('#bDone').classList.toggle('hide', !showDone);
+    $('#rem').classList.toggle('has-done', showDone);
+    requestAnimationFrame(fitAll);
+  }
+  $('#rem').classList.toggle('has-done', showDone);
+  $('#bDone2').classList.toggle('hide', !showDone);
+  $('#fin').classList.toggle('hide', !(S.doneAt && t - S.doneAt < 5000 && role === 'display'));
+  const showProg = single && ph.p === 'run';
   $('#prog').classList.toggle('hide', !showProg);
   if (showProg){
     const total = S.dur * 60000, rr = ph.p === 'late' ? 0 : ph.r;
@@ -604,6 +685,9 @@ function render(full){
   $$('[data-ori]').forEach(b => b.classList.toggle('sel', b.dataset.ori === ori));
   $$('[data-gps]').forEach(b => b.classList.toggle('sel', (b.dataset.gps === '1') === gpsUse));
   $$('[data-bright]').forEach(b => b.classList.toggle('sel', b.dataset.bright === bright));
+  $$('[data-voice]').forEach(b => b.classList.toggle('sel', b.dataset.voice === voiceSel));
+  $('#voiceNote').textContent = !VOICE.packs.length ? '録音の声が見つかりません（端末の音声で読みます）'
+    : voiceSel === 'tts' ? '端末の読み上げ機能を使います' : VOICE.ready ? '「音のテスト」で試聴できます' : '読み込み中…';
   $('#setGps').classList.toggle('hide', role !== 'display');
   $('#gpsNote').textContent = !isApp ? 'アプリ版のみ（Web版は端末の時計）'
     : !gpsUse ? '端末の時計を使用中' : gps.at ? '合わせ済み（端末とのずれ ' + (gps.off / 1000).toFixed(1) + '秒）' : 'GPSを受信中…（屋外で数十秒）';
@@ -714,6 +798,9 @@ $('#linkBtn').onclick = () => { if (role === 'remote') showDevices(); };
 $('#disp').addEventListener('click', () => showCtl(true));
 $('#ctlClose').onclick = () => showCtl(false);
 $('#bIn').onclick = () => act({c:'in'});
+$('#bDone').addEventListener('click', e => { e.stopPropagation(); act({c:'done'}); });
+$('#bDone2').onclick = () => { act({c:'done'}); toast('お疲れさまでした'); };
+$('#fin').addEventListener('click', e => e.stopPropagation());
 $$('[data-cmd]').forEach(b => b.onclick = () => act(JSON.parse(b.dataset.cmd)));
 $('#bPlanKey').onclick = () => kp.open('time', 'IN予定時刻（時・分の4桁　例：0930）', v => {
   if (v.length !== 4) { toast('4桁で入力してください'); return false; }
@@ -768,6 +855,7 @@ $$('[data-serve]').forEach(b => b.onclick = () => {
 });
 $$('[data-ori]').forEach(b => b.onclick = () => { ori = b.dataset.ori; ls.set('ori', ori); applyOri(); render(true); });
 $$('[data-gps]').forEach(b => b.onclick = () => { gpsUse = b.dataset.gps === '1'; ls.set('gps', gpsUse); applyGps(); cues.reset(); render(true); pushState(); });
+$('[data-voice="tts"]').onclick = () => { voiceSel = 'tts'; ls.set('voice', voiceSel); render(true); };
 $$('[data-bright]').forEach(b => b.onclick = () => { bright = b.dataset.bright; ls.set('bright', bright); applyBright(); render(true); });
 /** GPS時刻の受信は「表示する端末」でONの時だけ（リモコンは表示端末の時計に合わせる） */
 function applyGps(){ if (isApp) N.gpsClock(role === 'display' && gpsUse); }
@@ -790,7 +878,9 @@ async function keepAwake(){
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') keepAwake(); });
 
 $('#ver').textContent = 'サービスタイマー ' + VERSION + (isApp ? '（アプリ ' + N.version() + '）' : '（Web版）') + '　SERAPHIX';
+fetch('voice/packs.json').then(r => r.json()).then(p => { $('#ver').textContent += '　音声：' + p.map(x => x.credit).join('、'); }).catch(() => {});
 window.addEventListener('resize', () => { fitAll(); });
+loadVoice();
 applyOri();
 applyBright();
 applyGps();
