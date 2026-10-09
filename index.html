@@ -381,6 +381,7 @@ function render(full){
   $('#dClock').textContent = hms(t);
   const [lc] = linkText();
   $('#dLink').textContent = role === 'display' && serveOn ? (lc === 'on' ? '● リモコン' : lc === 'err' ? '× リモコン' : '○ リモコン') : '';
+  $('#dLink').style.color = lc === 'on' ? 'var(--ok)' : lc === 'err' ? 'var(--bad)' : '';
 
   // 操作パネル
   $('#mIn').textContent = S.inAt == null ? '--:--' : hm(S.inAt);
@@ -428,7 +429,9 @@ function fit(el){
   if (!h || !w) return;
   let fs = h * 0.92;
   el.style.fontSize = fs + 'px';
-  const sw = el.scrollWidth;
+  // 中央寄せだと左へのはみ出しが scrollWidth に出ないので、文字そのものの幅を測る
+  const r = document.createRange(); r.selectNodeContents(el);
+  const sw = r.getBoundingClientRect().width;
   if (sw > w * 0.96) fs = fs * (w * 0.96) / sw;
   el.style.fontSize = Math.floor(fs) + 'px';
 }
