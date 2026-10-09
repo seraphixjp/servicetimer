@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#000000">
 <title>サービスタイマー</title>
+<link rel="manifest" href="manifest.webmanifest">
 <style>
 :root{
   --bg:#000; --fg:#fff; --dim:#8a8f98; --line:#2a2d33; --panel:#14161a; --btn:#23262c;
@@ -146,7 +147,7 @@ body.night #disp{filter:brightness(.6)}
 <!-- 表示画面 -->
 <div id="disp">
   <div id="top">
-    <span class="no" id="dNo"></span><span class="ttl" id="dTtl"></span><span class="sp"></span>
+    <span class="no" id="dNo"></span><span class="ttl" id="dTtl"></span><span class="bdg hide" id="dTrial" style="color:var(--accent)">Web体験版</span><span class="sp"></span>
     <span class="bdg" id="dLink"></span><span class="bdg" id="dBat"></span><span class="bdg" id="dTime">端末時刻</span>
     <img id="dLogo" src="seraphix-logo.png" alt="SERAPHIX"><span id="dClock"></span>
   </div>
@@ -211,6 +212,10 @@ body.night #disp{filter:brightness(.6)}
     <button data-role="display">この端末で表示</button><button data-role="remote">リモコン</button></span></div>
   <div class="set" id="setServe"><span>リモコン受付<br><span class="note">ONにすると別の端末から操作できる</span></span><span class="opts">
     <button data-serve="1">ON</button><button data-serve="0">OFF</button></span></div>
+  <div class="set" id="setVia"><span>リモコンのつなぎ方<br><span class="note">インターネットは電波が必要・離れていても使える</span></span><span class="opts">
+    <button data-via="bt">Bluetooth</button><button data-via="net">インターネット</button></span></div>
+  <div class="set" id="setRoom"><span>接続コード<br><span class="note">リモコン側でこの6桁を入れる</span></span>
+    <span class="opts" style="align-items:center"><b class="num" id="roomCode" style="font-size:34px;letter-spacing:.12em"></b><button id="roomNew">変える</button></span></div>
   <div class="set"><span>画面の向き</span><span class="opts">
     <button data-ori="any">自動</button><button data-ori="landscape">横</button><button data-ori="portrait">縦</button></span></div>
   <div class="set" id="setGps"><span>時計をGPS時刻に合わせる<br><span class="note" id="gpsNote"></span></span><span class="opts">
@@ -249,7 +254,7 @@ body.night #disp{filter:brightness(.6)}
 
 <script>
 'use strict';
-const VERSION = '0.6.1';
+const VERSION = '0.7.0';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const N = window.ST || null;                 // アプリ版の橋渡し（ブラウザでは無し）
@@ -268,6 +273,11 @@ const roleFixed = params.get('role');        // ブラウザで2タブ試験す�
 let role = roleFixed || ls.get('role', 'display');
 let S = Object.assign({car:'', planIn:null, inAt:null, dur:30, adj:0, voice:true}, ls.get('state', {}));
 let serveOn = ls.get('serve', false);
+// リモコンのつなぎ方：bt＝Bluetooth（アプリのみ）／net＝インターネット（Firebase）／local＝同じブラウザのタブ同士（試験用 ?via=local）
+let via = params.get('via') || (isApp ? ls.get('via', 'bt') : 'net');
+let room = ls.get('room', null) || String(Math.floor(100000 + Math.random() * 900000));
+ls.set('room', room);
+let joinCode = ls.get('join', null);       // リモコン側：つなぐ表示端末のコード
 let ori = ls.get('ori', 'any');
 let gpsUse = ls.get('gps', true);
 let bright = ls.get('bright', 'max');
@@ -506,16 +516,81 @@ function playSound(name){
 }
 function vib(ms){ if (isApp) N.vibrate(ms); else if (navigator.vibrate) navigator.vibrate(ms); }
 
-// ---------------- 通信（アプリ＝Bluetooth／ブラウザ＝同じブラウザのタブ同士で試験） ----------------
-const bc = (!isApp && 'BroadcastChannel' in window) ? new BroadcastChannel('st-link') : null;
+// ---------------- 通信（Bluetooth／インターネット／タブ同士の試験） ----------------
+const bc = (!isApp && via === 'local' && 'BroadcastChannel' in window) ? new BroadcastChannel('st-link') : null;
 
 function send(msg){
+  if (via === 'net'){ NET.send(msg); return; }
   const line = JSON.stringify(msg);
-  if (isApp) N.btSend(line); else if (bc) bc.postMessage(line);
+  if (via === 'bt' && isApp) N.btSend(line); else if (bc) bc.postMessage(line);
 }
 function pushState(){
   if (role === 'display' && serveOn) send({t:'state', s:S, now: clockNow(), bat});
 }
+
+/**
+ * インターネット経由（Firebase Realtime Database）。rooms/<6桁>/ に
+ *   state＝表示端末の状態（書くのは表示端末）、cmds＝リモコンからの操作（表示端末が読んで消す）、remotes＝つないでいるリモコン
+ * 受け取ったものは Bluetooth と同じ __btRecv / __btStatus に流す。SDKはネットが要る時だけ読み込む。
+ */
+const NET = {
+  fb:null, db:null, uid:null, off:0, unsub:[], code:null, mode:null,
+  async init(){
+    if (this.fb) return this.fb;
+    const cfg = (await import('./firebase-config.js')).default;
+    const V = 'https://www.gstatic.com/firebasejs/10.12.5/';
+    const [app, auth, db] = await Promise.all([import(V + 'firebase-app.js'), import(V + 'firebase-auth.js'), import(V + 'firebase-database.js')]);
+    const a = app.initializeApp(cfg);
+    const cred = await auth.signInAnonymously(auth.getAuth(a));
+    this.uid = cred.user.uid;
+    this.db = db.getDatabase(a);
+    db.onValue(db.ref(this.db, '.info/serverTimeOffset'), v => { this.off = v.val() || 0; });
+    return this.fb = db;
+  },
+  stop(){ this.unsub.forEach(f => { try { f(); } catch(e) {} }); this.unsub = []; this.code = null; this.mode = null; },
+  async serve(code){
+    this.stop(); this.mode = 'serve'; this.code = code;
+    window.__btStatus('connecting', '');
+    try {
+      const d = await this.init(); if (this.code !== code) return;
+      const base = 'rooms/' + code;
+      this.unsub.push(d.onChildAdded(d.ref(this.db, base + '/cmds'), snap => {
+        const v = snap.val(); d.remove(snap.ref);
+        // 1分以上前の操作（表示端末が止まっていた間のもの）は捨てる
+        if (v && v.cmd && Date.now() + this.off - (v.at || 0) < 60000) window.__btRecv(JSON.stringify({t:'cmd', cmd:v.cmd}));
+      }));
+      this.unsub.push(d.onValue(d.ref(this.db, base + '/remotes'), snap => {
+        window.__btStatus('serving', String(snap.exists() ? Object.keys(snap.val()).length : 0));
+      }));
+      this.unsub.push(d.onValue(d.ref(this.db, '.info/connected'), snap => { if (!snap.val()) window.__btStatus('connecting', ''); else pushState(); }));
+    } catch(e) { window.__btStatus('error', 'インターネットに接続できません'); }
+  },
+  async join(code){
+    this.stop(); this.mode = 'join'; this.code = code;
+    window.__btStatus('connecting', '');
+    try {
+      const d = await this.init(); if (this.code !== code) return;
+      const base = 'rooms/' + code, me = d.ref(this.db, base + '/remotes/' + this.uid);
+      this.unsub.push(d.onValue(d.ref(this.db, '.info/connected'), snap => {
+        if (!snap.val()){ window.__btStatus('retry', ''); return; }
+        d.onDisconnect(me).remove(); d.set(me, d.serverTimestamp());
+      }));
+      this.unsub.push(d.onValue(d.ref(this.db, base + '/state'), snap => {
+        const v = snap.val();
+        if (!v){ window.__btStatus('error', 'コード ' + code + ' の表示端末が見つかりません'); return; }
+        window.__btStatus('connected', 'コード ' + code);
+        window.__btRecv(JSON.stringify(v));
+      }));
+      this.unsub.push(() => d.remove(me));
+    } catch(e) { window.__btStatus('error', 'インターネットに接続できません'); }
+  },
+  send(msg){
+    if (!this.fb || !this.code) return;
+    const d = this.fb, base = 'rooms/' + this.code;
+    if (msg.t === 'state' && this.mode === 'serve') d.set(d.ref(this.db, base + '/state'), Object.assign({}, msg, {at: d.serverTimestamp()})).catch(() => {});
+    else if (msg.t === 'cmd' && this.mode === 'join') d.push(d.ref(this.db, base + '/cmds'), {cmd: msg.cmd, at: d.serverTimestamp()}).catch(() => {});
+  }
+};
 
 window.__btStatus = (state, detail) => { link = {state, detail}; render(); if (role === 'display' && state === 'serving') pushState(); };
 window.__btRecv = line => {
@@ -526,10 +601,10 @@ window.__btRecv = line => {
     else if (m.t === 'cmd' && m.cmd) apply(m.cmd);
   } else if (m.t === 'state'){
     S = Object.assign(S, m.s);
-    remoteOff = m.now - Date.now();
+    remoteOff = m.at ? (m.now - m.at) + NET.off : m.now - Date.now();
     if (m.bat) bat = m.bat;
     lastStateAt = Date.now();
-    if (!isApp) link = {state:'connected', detail:'ブラウザの別タブ'};
+    if (via === 'local') link = {state:'connected', detail:'ブラウザの別タブ'};
     render(true);
   }
 };
@@ -560,20 +635,25 @@ if (!isApp && navigator.getBattery) navigator.getBattery().then(b => {
 if (bc) bc.onmessage = e => window.__btRecv(e.data);
 
 function startLink(){
+  if (isApp) N.btStop();
+  NET.stop();
+  link = {state:'idle', detail:''};
   if (role === 'display'){
-    if (!serveOn){ if (isApp) N.btStop(); link = {state:'idle', detail:''}; return; }
-    if (isApp) N.btServe(); else { link = {state:'serving', detail:'0'}; pushState(); }
+    if (!serveOn) return;
+    if (via === 'net') NET.serve(room);
+    else if (via === 'bt') N.btServe();
+    else { link = {state:'serving', detail:'0'}; pushState(); }
   } else {
-    if (isApp){
-      if (remoteAddr) N.btConnect(remoteAddr); else link = {state:'idle', detail:''};
-    } else { link = {state:'connecting', detail:''}; send({t:'hello'}); }
+    if (via === 'net'){ if (joinCode) NET.join(joinCode); }
+    else if (via === 'bt'){ if (remoteAddr) N.btConnect(remoteAddr); }
+    else { link = {state:'connecting', detail:''}; send({t:'hello'}); }
   }
 }
 
-// ブラウザ試験：リモコンは状態が20秒届かなければ未接続扱い、表示端末は10秒ごとに状態を送る
+// 表示端末は10秒ごとに状態を送る／タブ同士の試験ではリモコンは20秒届かなければ未接続扱い
 setInterval(() => {
   if (role === 'display') pushState();
-  else if (!isApp){
+  else if (via === 'local'){
     if (Date.now() - lastStateAt > 20000){ link = {state:'connecting', detail:''}; send({t:'hello'}); render(); }
   }
 }, 10000);
@@ -585,17 +665,19 @@ function linkText(){
   const s = link.state, d = link.detail;
   if (role === 'display'){
     if (!serveOn) return ['', '1台で使用中（リモコン受付OFF）', ''];
-    if (s === 'serving') return [+d > 0 || !isApp ? 'on' : 'wait', isApp ? 'リモコン受付中（接続 ' + d + '台）' : 'リモコン受付中（ブラウザ試験）', ''];
+    if (s === 'serving') return [+d > 0 || via === 'local' ? 'on' : 'wait',
+      via === 'local' ? 'リモコン受付中（ブラウザ試験）' : 'リモコン受付中' + (via === 'net' ? '（インターネット・コード ' + room + '）' : '') + '　接続 ' + d + '台', ''];
+    if (s === 'connecting') return ['wait', 'インターネットに接続しています…', ''];
     if (s === 'off') return ['err', 'BluetoothがOFFです', ''];
     if (s === 'error') return ['err', d, ''];
     return ['wait', '受付を準備中…', ''];
   }
   if (s === 'connected') return [batLow() ? 'err' : 'on', '接続中：' + (d || '表示端末') + (batLow() ? '（表示端末の電池 ' + bat.level + '%・要充電）' : ''), '変更'];
-  if (s === 'connecting') return ['wait', '接続しています…' + (d ? ' ' + d : ''), isApp ? '変更' : ''];
+  if (s === 'connecting') return ['wait', '接続しています…' + (d ? ' ' + d : ''), via === 'local' ? '' : '変更'];
   if (s === 'retry') return ['wait', '表示端末を探しています（自動で再接続）', '変更'];
   if (s === 'off') return ['err', 'BluetoothがOFFです', '接続'];
   if (s === 'error') return ['err', d, '接続'];
-  return ['err', '表示端末を選んでください', '接続'];
+  return ['err', via === 'net' ? '接続コードを入れてください' : '表示端末を選んでください', '接続'];
 }
 
 function render(full){
@@ -629,6 +711,7 @@ function render(full){
   $('#disp').className = (cls || 'run') + (single ? ' svc' : '') + (role === 'remote' ? ' hide' : '');
   $('#dNo').textContent = S.car || '';
   $('#dTtl').textContent = 'SERVICE　' + S.dur + '分';
+  $('#dTrial').classList.toggle('hide', isApp);
   $('#dClock').textContent = hms(t);
   // 進行バー：サービス時間のうち残りの割合。目盛りは10分・5分・1分前
   const showDone = single && ph.p === 'late';
@@ -682,6 +765,10 @@ function render(full){
   $('#adjV').textContent = (S.adj >= 0 ? '+' : '') + (S.adj / 1000).toFixed(0) + '秒';
   $$('[data-role]').forEach(b => b.classList.toggle('sel', b.dataset.role === role));
   $$('[data-serve]').forEach(b => b.classList.toggle('sel', (b.dataset.serve === '1') === serveOn));
+  $$('[data-via]').forEach(b => b.classList.toggle('sel', b.dataset.via === via));
+  $('#setVia').classList.toggle('hide', !isApp);
+  $('#setRoom').classList.toggle('hide', !(role === 'display' && serveOn && via === 'net'));
+  $('#roomCode').textContent = room;
   $$('[data-ori]').forEach(b => b.classList.toggle('sel', b.dataset.ori === ori));
   $$('[data-gps]').forEach(b => b.classList.toggle('sel', (b.dataset.gps === '1') === gpsUse));
   $$('[data-bright]').forEach(b => b.classList.toggle('sel', b.dataset.bright === bright));
@@ -743,7 +830,7 @@ const kp = {
     this.mode = mode; this.buf = ''; this.done = done;
     $('#kpTtl').textContent = title; $('#kp').classList.remove('hide'); this.show();
   },
-  max(){ return this.mode === 'time' ? 4 : this.mode === 'min' ? 3 : 4; },
+  max(){ return this.mode === 'time' ? 4 : this.mode === 'min' ? 3 : this.mode === 'code' ? 6 : 4; },
   show(){
     let html;
     if (this.mode === 'time'){
@@ -792,7 +879,16 @@ function showDevices(){
 $('#devReload').onclick = showDevices;
 $('#devSettings').onclick = () => isApp ? N.openBtSettings() : toast('アプリ版のみ');
 $('#devClose').onclick = () => $('#dev').classList.add('hide');
-$('#linkBtn').onclick = () => { if (role === 'remote') showDevices(); };
+$('#linkBtn').onclick = () => { if (role === 'remote') via === 'net' ? askCode() : showDevices(); };
+/** リモコン：表示端末の接続コード（6桁）を入れる */
+function askCode(){
+  kp.open('code', '表示端末の接続コード（6桁）', v => {
+    if (!/^\d{6}$/.test(v)) { toast('6桁で入力してください'); return false; }
+    joinCode = v; ls.set('join', v); NET.join(v);
+  });
+}
+$$('[data-via]').forEach(b => b.onclick = () => { via = b.dataset.via; ls.set('via', via); startLink(); render(true); if (role === 'remote' && via === 'net' && !joinCode) askCode(); });
+$('#roomNew').onclick = () => { room = String(Math.floor(100000 + Math.random() * 900000)); ls.set('room', room); startLink(); render(true); };
 
 // ---------------- ボタン ----------------
 $('#disp').addEventListener('click', () => showCtl(true));
@@ -847,7 +943,8 @@ $$('[data-role]').forEach(b => b.onclick = () => {
   startLink();
   applyGps();
   showCtl(role === 'display');
-  if (role === 'remote' && isApp && !remoteAddr) showDevices();
+  if (role === 'remote' && via === 'bt' && !remoteAddr) showDevices();
+  if (role === 'remote' && via === 'net' && !joinCode) askCode();
 });
 $$('[data-serve]').forEach(b => b.onclick = () => {
   serveOn = b.dataset.serve === '1'; ls.set('serve', serveOn);
@@ -881,6 +978,8 @@ $('#ver').textContent = 'サービスタイマー ' + VERSION + (isApp ? '（ア
 fetch('voice/packs.json').then(r => r.json()).then(p => { $('#ver').textContent += '　音声：' + p.map(x => x.credit).join('、'); }).catch(() => {});
 window.addEventListener('resize', () => { fitAll(); });
 loadVoice();
+// Web版：電波が無くても開けるように（アプリ版は中に入っているので不要）
+if (!isApp && 'serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(() => {});
 applyOri();
 applyBright();
 applyGps();
