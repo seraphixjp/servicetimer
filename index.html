@@ -254,7 +254,7 @@ body.night #disp{filter:brightness(.6)}
 
 <script>
 'use strict';
-const VERSION = '0.7.0';
+const VERSION = '0.7.1';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const N = window.ST || null;                 // アプリ版の橋渡し（ブラウザでは無し）
@@ -271,7 +271,9 @@ const ls = {
 // 役割：display＝この端末で表示（1台で完結。受付ONでリモコンからも操作できる）／remote＝別の表示端末を操作
 const roleFixed = params.get('role');        // ブラウザで2タブ試験するとき ?role=remote
 let role = roleFixed || ls.get('role', 'display');
-let S = Object.assign({car:'', planIn:null, inAt:null, dur:30, adj:0, voice:true}, ls.get('state', {}));
+// 状態の初期値（Firebase は null を保存しないので、受け取った状態は必ずこれに重ねる）
+const DEF = {car:'', planIn:null, inAt:null, inAuto:false, doneAt:null, dur:30, adj:0, voice:true};
+let S = Object.assign({}, DEF, ls.get('state', {}));
 let serveOn = ls.get('serve', false);
 // リモコンのつなぎ方：bt＝Bluetooth（アプリのみ）／net＝インターネット（Firebase）／local＝同じブラウザのタブ同士（試験用 ?via=local）
 let via = params.get('via') || (isApp ? ls.get('via', 'bt') : 'net');
@@ -600,7 +602,7 @@ window.__btRecv = line => {
     if (m.t === 'hello') pushState();
     else if (m.t === 'cmd' && m.cmd) apply(m.cmd);
   } else if (m.t === 'state'){
-    S = Object.assign(S, m.s);
+    S = Object.assign({}, DEF, m.s);
     remoteOff = m.at ? (m.now - m.at) + NET.off : m.now - Date.now();
     if (m.bat) bat = m.bat;
     lastStateAt = Date.now();
@@ -939,7 +941,7 @@ $$('[data-role]').forEach(b => b.onclick = () => {
   if (isApp) N.btStop();
   link = {state:'idle', detail:''};
   cues.reset();
-  if (role === 'display') S = Object.assign({car:'', planIn:null, inAt:null, dur:30, adj:0, voice:true}, ls.get('state', {}));
+  if (role === 'display') S = Object.assign({}, DEF, ls.get('state', {}));
   startLink();
   applyGps();
   showCtl(role === 'display');
