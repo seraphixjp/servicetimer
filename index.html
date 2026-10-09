@@ -115,14 +115,14 @@ button:disabled{opacity:.35}
   </div>
 
   <div id="ops">
-    <h2>IN予定（サービス前は「INまで」を表示）</h2>
-    <div class="row">
+    <h2>IN予定（この時刻になると自動でサービスINに切り替わる）</h2>
+    <button class="big go" id="bPlanKey" style="width:100%">IN予定を入力</button>
+    <div class="row" style="margin-top:10px">
       <button class="mid" data-cmd='{"c":"planAdj","v":-1}'>予定 −1分</button>
-      <button class="mid" id="bPlanKey">IN予定を入力</button>
       <button class="mid" data-cmd='{"c":"planAdj","v":1}'>予定 ＋1分</button>
     </div>
-    <h2>到着したら</h2>
-    <button class="big go" id="bIn" style="width:100%">IN（今の時刻）</button>
+    <h2>INが予定とずれた時だけ</h2>
+    <button class="mid" id="bIn" style="width:100%">今の時刻をINにする</button>
     <div class="row" style="margin-top:10px">
       <button class="mid" data-cmd='{"c":"inAdj","v":-1}'>IN −1分</button>
       <button class="mid" id="bInKey">IN時刻を入力</button>
@@ -185,7 +185,7 @@ button:disabled{opacity:.35}
 
 <script>
 'use strict';
-const VERSION = '0.2.0';
+const VERSION = '0.3.0';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const N = window.ST || null;                 // アプリ版の橋渡し（ブラウザでは無し）
@@ -250,17 +250,18 @@ function apply(cmd){
   let say = null;
   switch (cmd.c){
     case 'in':
-      S.inAt = Math.floor(t / 60000) * 60000;
+      S.inAt = Math.floor(t / 60000) * 60000; S.inAuto = false;
       say = inOutSpeech(); break;
-    case 'inAt': S.inAt = atToday(t, cmd.h, cmd.m); say = inOutSpeech(); break;
-    case 'planAt': S.planIn = atToday(t, cmd.h, cmd.m); say = planSpeech(); break;
-    case 'planAdj': if (S.planIn != null){ S.planIn += cmd.v * 60000; say = planSpeech(); } break;
-    case 'inAdj': if (S.inAt != null){ S.inAt += cmd.v * 60000; say = inOutSpeech(); } break;
+    case 'inAt': S.inAt = atToday(t, cmd.h, cmd.m); S.inAuto = false; say = inOutSpeech(); break;
+    // 予定を直した時、自動で入ったINは取り消して予定からやり直す（予定がまだ先ならIN前に戻る）
+    case 'planAt': S.planIn = atToday(t, cmd.h, cmd.m); if (S.inAuto) S.inAt = null; say = autoIn(t, true) ? inOutSpeech() : planSpeech(); break;
+    case 'planAdj': if (S.planIn != null){ S.planIn += cmd.v * 60000; if (S.inAuto) S.inAt = null; say = autoIn(t, true) ? inOutSpeech() : planSpeech(); } break;
+    case 'inAdj': if (S.inAt != null){ S.inAt += cmd.v * 60000; S.inAuto = false; say = inOutSpeech(); } break;
     case 'dur': S.dur = cmd.v; say = S.inAt != null ? inOutSpeech() : 'サービス時間は' + cmd.v + '分です。'; break;
     case 'car': S.car = cmd.v; break;
     case 'voice': S.voice = cmd.v; if (cmd.v) say = '読み上げをオンにしました。'; break;
     case 'adj': S.adj += cmd.v; break;
-    case 'reset': S.inAt = null; S.planIn = null; say = 'リセットしました。'; break;
+    case 'reset': S.inAt = null; S.planIn = null; S.inAuto = false; say = 'リセットしました。'; break;
     case 'test': say = '読み上げのテストです。アウトまで、あと5分です。'; break;
   }
   ls.set('state', S);
@@ -281,6 +282,19 @@ function atToday(t, h, m){
 /** 読み上げ用の時刻「9時30分」「10時ちょうど」 */
 function jt(ms){ const d = new Date(ms); return d.getHours() + '時' + (d.getMinutes() ? d.getMinutes() + '分' : 'ちょうど'); }
 function planSpeech(){ return 'サービスインの予定は、' + jt(S.planIn) + 'です。'; }
+/** IN予定の時刻になったら自動でサービスIN（表示端末だけが行う）。quiet＝読み上げない */
+function autoIn(t, quiet){
+  if (S.inAt != null || S.planIn == null || t < S.planIn) return false;
+  S.inAt = S.planIn; S.inAuto = true;
+  if (!quiet){
+    ls.set('state', S);
+    cues.reset();
+    if (S.voice) speak('サービスインです。アウトは、' + jt(outAt()) + 'です。', true);
+    render(true);
+    pushState();
+  }
+  return true;
+}
 function inOutSpeech(){ return 'サービスイン、' + jt(S.inAt) + '。アウトは、' + jt(outAt()) + 'です。'; }
 
 // ---------------- 読み上げ ----------------
@@ -422,7 +436,7 @@ function linkText(){
 function render(full){
   const t = now(), ph = phase(t), o = outAt();
   const remTxt = ph.p === 'idle' ? '--:--' : (ph.p === 'late' || ph.p === 'wait') ? '+' + dur(ph.r) : dur(ph.r);
-  const remLab = {idle:'IN予定を入れるか、到着したらIN', pre:'サービスINまで', wait:'IN予定を過ぎています（到着したらIN）',
+  const remLab = {idle:'IN予定を入れてください', pre:'サービスINまで', wait:'IN予定を過ぎています（到着したらIN）',
     run:'OUTまで', out:'OUTの時刻（この分のうちにOUT）', late:'遅れ'}[ph.p];
   const cls = ph.p === 'idle' ? 'idle' : ph.p === 'pre' ? 'pre' : ph.p === 'wait' ? 'wait' : ph.p === 'out' ? 'out' : ph.p === 'late' ? 'late'
     : ph.r <= 60000 ? 'bad' : ph.r <= 300000 ? 'warn' : '';
@@ -649,7 +663,7 @@ showCtl(false);
 fitAll();
 setInterval(() => {
   render();
-  if (role === 'display') cues.tick(now());
+  if (role === 'display'){ autoIn(now()); cues.tick(now()); }
 }, 200);
 </script>
 </body>
