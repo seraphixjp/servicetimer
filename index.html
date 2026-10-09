@@ -205,7 +205,7 @@ button:disabled{opacity:.35}
 
 <script>
 'use strict';
-const VERSION = '0.4.1';
+const VERSION = '0.4.2';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const N = window.ST || null;                 // アプリ版の橋渡し（ブラウザでは無し）
@@ -240,7 +240,7 @@ function dur(ms){
   return (h ? h + ':' + pad(m) : String(m).padStart(2, '0')) + ':' + pad(s % 60);
 }
 
-/** 今の局面：idle（未設定）／pre（IN予定まで）／wait（IN予定を過ぎて到着待ち）／run（OUTまで）／out（OUTの分の中）／late（遅れ） */
+/** 今の局面：idle（未設定）／pre（IN予定まで）／wait（IN予定を過ぎて到着待ち）／run（OUTまで）／late（OUT超過） */
 function phase(t){
   const o = outAt();
   if (o == null){
@@ -250,8 +250,7 @@ function phase(t){
   }
   const r = o - t;
   if (r > 0) return {p:'run', r};
-  if (r > -60000) return {p:'out', r: 60000 + r};
-  return {p:'late', r: -r - 60000};
+  return {p:'late', r: -r};      // OUT時刻を過ぎたら「超過」
 }
 
 // ---------------- 操作（コマンド） ----------------
@@ -347,7 +346,7 @@ const cues = {
       }
     }
     else if (ph.p === 'wait'){ key = 'wait'; text = 'サービスインの予定時刻になりました。'; chime = 'in'; } else if (ph.p === 'out'){ key = 'out'; text = 'アウトの時間です。'; chime = 'out'; }
-    else if (ph.p === 'late'){ const m = Math.floor(ph.r / 60000) + 1; key = 'late' + m; text = 'アウトの時間から、' + m + '分遅れています。'; chime = 'urgent'; }
+    else if (ph.p === 'late'){ key = 'late'; if (ph.r < 5000){ text = 'アウトの時間です。'; chime = 'out'; } }   // 超過中は読み上げない
     if (this.last === null){ this.last = key; return; }
     if (key !== this.last){ this.last = key; if (text && S.voice) speak(text, chime); }
   }
@@ -474,7 +473,7 @@ function render(full){
   const t = now(), ph = phase(t), o = outAt();
   const remTxt = ph.p === 'idle' ? '--:--' : (ph.p === 'late' || ph.p === 'wait') ? '+' + dur(ph.r) : dur(ph.r);
   const remLab = {idle:'IN予定を入れてください', pre:'サービスINまで', wait:'IN予定を過ぎています（到着したらIN）',
-    run:'OUTまで', out:'OUTの時刻（この分のうちにOUT）', late:'遅れ'}[ph.p];
+    run:'OUTまで', late:'超過'}[ph.p];
   const cls = ph.p === 'idle' ? 'idle' : ph.p === 'pre' ? 'pre' : ph.p === 'wait' ? 'wait' : ph.p === 'out' ? 'out' : ph.p === 'late' ? 'late'
     : ph.r <= 60000 ? 'bad' : ph.r <= 300000 ? 'warn' : '';
   // IN前は予定のIN・OUT（予定IN＋サービス時間）を出す
