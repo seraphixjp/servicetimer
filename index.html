@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#000000">
+<title>サービスタイマー</title>
+<style>
+:root{
+  --bg:#000; --fg:#fff; --dim:#8a8f98; --line:#2a2d33; --panel:#14161a; --btn:#23262c;
+  --ok:#2ecc71; --warn:#ffb300; --bad:#ff4d4d; --accent:#ffb300;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);
+  font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;overflow:hidden;
+  user-select:none;-webkit-user-select:none}
+button{font:inherit;color:inherit;background:var(--btn);border:0;border-radius:12px;cursor:pointer}
+button:active{filter:brightness(1.4)}
+button:disabled{opacity:.35}
+.num{font-variant-numeric:tabular-nums;font-weight:800;letter-spacing:-.02em}
+.hide{display:none!important}
+
+/* ===== 表示画面 ===== */
+#disp{position:fixed;inset:0;display:grid;grid-template-rows:auto 1fr 1.5fr;gap:1.2vmin;padding:1.5vmin 2vmin}
+#top{display:flex;align-items:center;justify-content:space-between;gap:2vmin;font-size:4.2vmin;color:var(--dim)}
+#top .car{color:var(--fg);font-weight:800}
+#top .right{display:flex;gap:2.5vmin;align-items:center}
+#io{display:grid;grid-template-columns:1fr 1fr;gap:2vmin;min-height:0}
+.cell{position:relative;border:2px solid var(--line);border-radius:2vmin;min-height:0;display:flex;flex-direction:column;padding:1vmin 2vmin}
+.cell .lab{font-size:3.6vmin;color:var(--dim);font-weight:700;line-height:1.1}
+.box{flex:1;min-height:0;position:relative;overflow:hidden}
+.fit{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;white-space:nowrap;line-height:1}
+#cellOut .lab{color:var(--accent)}
+#rem{border-width:3px}
+#rem.warn{border-color:var(--warn)} #rem.warn .fit{color:var(--warn)}
+#rem.bad{border-color:var(--bad)} #rem.bad .fit{color:var(--bad)}
+#rem.out{border-color:var(--ok)} #rem.out .fit{color:var(--ok)}
+#rem.late .fit{color:var(--bad);animation:blink 1s steps(2) infinite}
+#rem.idle .fit{color:var(--dim)}
+@keyframes blink{50%{opacity:.35}}
+#hint{position:absolute;right:2vmin;bottom:1.2vmin;font-size:2.6vmin;color:var(--dim)}
+@media (orientation:portrait){
+  #disp{grid-template-rows:auto 1fr 1fr 1.6fr}
+  #io{grid-template-columns:1fr;grid-row:2/4}
+}
+
+/* ===== 操作パネル（表示端末ではタップで開く／リモコン端末では常に表示） ===== */
+#ctl{position:fixed;inset:0;background:var(--bg);overflow-y:auto;padding:12px 16px 40px;display:flex;flex-direction:column;gap:12px}
+#ctl h2{font-size:15px;color:var(--dim);margin:8px 0 0;font-weight:700}
+.row{display:flex;gap:10px}
+.row>*{flex:1}
+.big{min-height:84px;font-size:30px;font-weight:800}
+.mid{min-height:60px;font-size:22px;font-weight:700}
+.go{background:var(--ok);color:#000}
+.sel{background:var(--accent);color:#000}
+.danger{background:#4a1d1d;color:#ffb3b3}
+#mini{border:2px solid var(--line);border-radius:14px;padding:10px 14px;display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:6px;align-items:end}
+#mini .k{font-size:13px;color:var(--dim)} #mini .v{font-size:30px}
+#mini .rv{font-size:40px}
+#mini.warn .rv{color:var(--warn)} #mini.bad .rv,#mini.late .rv{color:var(--bad)} #mini.out .rv{color:var(--ok)}
+#link{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;background:var(--panel);font-size:16px}
+#link .dot{width:14px;height:14px;border-radius:50%;background:var(--dim);flex:none}
+#link.on .dot{background:var(--ok)} #link.wait .dot{background:var(--warn)} #link.err .dot{background:var(--bad)}
+#link .msg{flex:1}
+#link button{padding:8px 14px;font-size:15px;flex:none}
+.durs{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.durs button{min-height:60px;font-size:24px;font-weight:800}
+.set{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;background:var(--panel);border-radius:12px;font-size:17px}
+.set .opts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.set .opts button{padding:10px 14px;font-size:16px}
+.note{font-size:13px;color:var(--dim);line-height:1.6}
+#ctlClose{position:sticky;top:0;z-index:2}
+.disabled{opacity:.35;pointer-events:none}
+
+/* ===== テンキー・シート ===== */
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:flex-end;justify-content:center;z-index:10}
+.sheet .in{background:var(--panel);width:100%;max-width:520px;border-radius:18px 18px 0 0;padding:16px;display:flex;flex-direction:column;gap:12px;max-height:92vh;overflow-y:auto}
+.sheet .ttl{font-size:16px;color:var(--dim)}
+#kpVal{font-size:52px;text-align:center;padding:6px;border:2px solid var(--line);border-radius:12px;min-height:76px}
+#kpVal .ph{color:#444}
+.keys{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.keys button{min-height:64px;font-size:30px;font-weight:700}
+#devList button{display:block;width:100%;text-align:left;padding:16px;font-size:18px;margin-bottom:8px}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#333;color:#fff;padding:12px 18px;border-radius:12px;font-size:16px;z-index:20;max-width:90vw;display:flex;gap:14px;align-items:center}
+#toast button{padding:8px 12px;background:var(--accent);color:#000;font-weight:700}
+</style>
+</head>
+<body>
+
+<!-- 表示画面 -->
+<div id="disp">
+  <div id="top">
+    <div class="car" id="dCar"></div>
+    <div class="right"><span id="dLink"></span><span class="num" id="dClock"></span></div>
+  </div>
+  <div id="io">
+    <div class="cell"><div class="lab">サービス IN</div><div class="box"><div class="fit num" id="dIn">--:--</div></div></div>
+    <div class="cell" id="cellOut"><div class="lab">サービス OUT</div><div class="box"><div class="fit num" id="dOut">--:--</div></div></div>
+  </div>
+  <div class="cell" id="rem"><div class="lab" id="dRemLab">OUTまで</div><div class="box"><div class="fit num" id="dRem">--:--</div></div>
+    <div id="hint">画面をタップで操作</div></div>
+</div>
+
+<!-- 操作パネル -->
+<div id="ctl" class="hide">
+  <button id="ctlClose" class="mid">✕ 閉じて表示に戻る</button>
+  <div id="link"><span class="dot"></span><span class="msg" id="linkMsg"></span><button id="linkBtn"></button></div>
+  <div id="mini">
+    <div><div class="k">IN</div><div class="v num" id="mIn">--:--</div></div>
+    <div><div class="k">OUT</div><div class="v num" id="mOut">--:--</div></div>
+    <div><div class="k" id="mRemLab">OUTまで</div><div class="rv num" id="mRem">--:--</div></div>
+  </div>
+
+  <div id="ops">
+    <button class="big go" id="bIn" style="width:100%">IN（今の時刻）</button>
+    <div class="row" style="margin-top:10px">
+      <button class="mid" data-cmd='{"c":"inAdj","v":-1}'>IN −1分</button>
+      <button class="mid" id="bInKey">IN時刻を入力</button>
+      <button class="mid" data-cmd='{"c":"inAdj","v":1}'>IN ＋1分</button>
+    </div>
+
+    <h2>サービス時間</h2>
+    <div class="durs" id="durs"></div>
+
+    <h2>ゼッケン・読み上げ</h2>
+    <div class="row">
+      <button class="mid" id="bCar">ゼッケン</button>
+      <button class="mid" id="bVoice"></button>
+      <button class="mid" id="bTest">読み上げテスト</button>
+    </div>
+
+    <h2>時計の補正（オフィシャルの時計に合わせる）</h2>
+    <div class="row">
+      <button class="mid" data-cmd='{"c":"adj","v":-1000}'>−1秒</button>
+      <div class="mid num" id="adjV" style="display:flex;align-items:center;justify-content:center"></div>
+      <button class="mid" data-cmd='{"c":"adj","v":1000}'>＋1秒</button>
+    </div>
+    <button class="mid danger" id="bReset" style="width:100%;margin-top:16px">長押しでリセット（IN・OUTを消す）</button>
+  </div>
+
+  <h2>設定</h2>
+  <div class="set"><span>この端末の役割</span><span class="opts">
+    <button data-role="display">この端末で表示</button><button data-role="remote">リモコン</button></span></div>
+  <div class="set" id="setServe"><span>リモコン受付<br><span class="note">ONにすると別の端末から操作できる</span></span><span class="opts">
+    <button data-serve="1">ON</button><button data-serve="0">OFF</button></span></div>
+  <div class="set"><span>画面の向き</span><span class="opts">
+    <button data-ori="any">自動</button><button data-ori="landscape">横</button><button data-ori="portrait">縦</button></span></div>
+  <div class="note" id="roleNote"></div>
+  <div class="note" id="ver"></div>
+</div>
+
+<!-- テンキー -->
+<div class="sheet hide" id="kp"><div class="in">
+  <div class="ttl" id="kpTtl"></div>
+  <div id="kpVal" class="num"></div>
+  <div class="keys">
+    <button>1</button><button>2</button><button>3</button>
+    <button>4</button><button>5</button><button>6</button>
+    <button>7</button><button>8</button><button>9</button>
+    <button data-k="bs">←</button><button>0</button><button data-k="ok" class="go">OK</button>
+  </div>
+  <button class="mid" data-k="cancel">キャンセル</button>
+</div></div>
+
+<!-- 接続先の選択（リモコン） -->
+<div class="sheet hide" id="dev"><div class="in">
+  <div class="ttl">表示している端末（タブレットなど）を選ぶ</div>
+  <div class="note">一覧に無いときは、先にAndroidの「設定 → Bluetooth」で2台をペアリングしてください。表示する端末は「リモコン受付：ON」にしておきます。</div>
+  <div id="devList"></div>
+  <div class="row"><button class="mid" id="devReload">一覧を更新</button><button class="mid" id="devSettings">Bluetooth設定</button></div>
+  <button class="mid" id="devClose">閉じる</button>
+</div></div>
+
+<div id="toast" class="hide"></div>
+
+<script>
+'use strict';
+const VERSION = '0.1.0';
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const N = window.ST || null;                 // アプリ版の橋渡し（ブラウザでは無し）
+const isApp = !!(N && N.isApp && N.isApp());
+const params = new URLSearchParams(location.search);
+const DURS = [10, 15, 20, 30, 45, 60, 90];
+
+const ls = {
+  get(k, d){ try{ const v = localStorage.getItem('st.' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem('st.' + k, JSON.stringify(v)); }catch(e){} }
+};
+
+// ---------------- 状態 ----------------
+// 役割：display＝この端末で表示（1台で完結。受付ONでリモコンからも操作できる）／remote＝別の表示端末を操作
+const roleFixed = params.get('role');        // ブラウザで2タブ試験するとき ?role=remote
+let role = roleFixed || ls.get('role', 'display');
+let S = Object.assign({car:'', inAt:null, dur:30, adj:0, voice:true}, ls.get('state', {}));
+let serveOn = ls.get('serve', false);
+let ori = ls.get('ori', 'any');
+let remoteAddr = ls.get('addr', null);
+let link = {state:'idle', detail:''};
+let remoteOff = 0;          // リモコン：表示端末の時計 − この端末の時計
+let lastStateAt = 0;
+
+const now = () => role === 'display' ? Date.now() + S.adj : Date.now() + remoteOff;
+const outAt = () => S.inAt == null ? null : S.inAt + S.dur * 60000;
+const pad = n => String(n).padStart(2, '0');
+const hm = t => { const d = new Date(t); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+const hms = t => { const d = new Date(t); return hm(t) + ':' + pad(d.getSeconds()); };
+function dur(ms){
+  const s = Math.max(0, Math.ceil(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
+  return (h ? h + ':' + pad(m) : String(m).padStart(2, '0')) + ':' + pad(s % 60);
+}
+
+/** 今の局面：idle（IN前）／run（OUTまで）／out（OUTの分の中）／late（遅れ） */
+function phase(t){
+  const o = outAt();
+  if (o == null) return {p:'idle'};
+  const r = o - t;
+  if (r > 0) return {p:'run', r};
+  if (r > -60000) return {p:'out', r: 60000 + r};
+  return {p:'late', r: -r - 60000};
+}
+
+// ---------------- 操作（コマンド） ----------------
+/** 操作はすべてここを通す。表示端末なら自分で反映、リモコンなら表示端末へ送る */
+function act(cmd){
+  if (role === 'display') apply(cmd);
+  else {
+    if (link.state !== 'connected') { toast('表示端末とつながっていません'); return; }
+    send({t:'cmd', cmd});
+    vib(30);
+  }
+}
+
+function apply(cmd){
+  const t = Date.now() + S.adj;
+  let say = null;
+  switch (cmd.c){
+    case 'in':
+      S.inAt = Math.floor(t / 60000) * 60000;
+      say = inOutSpeech(); break;
+    case 'inAt': {
+      const d = new Date(t); d.setHours(cmd.h, cmd.m, 0, 0);
+      let v = d.getTime();
+      if (v - t > 12 * 3600000) v -= 86400000;
+      if (t - v > 12 * 3600000) v += 86400000;
+      S.inAt = v; say = inOutSpeech(); break;
+    }
+    case 'inAdj': if (S.inAt != null){ S.inAt += cmd.v * 60000; say = inOutSpeech(); } break;
+    case 'dur': S.dur = cmd.v; say = S.inAt != null ? inOutSpeech() : 'サービス' + cmd.v + '分'; break;
+    case 'car': S.car = cmd.v; break;
+    case 'voice': S.voice = cmd.v; if (cmd.v) say = '読み上げオン'; break;
+    case 'adj': S.adj += cmd.v; break;
+    case 'reset': S.inAt = null; say = 'リセットしました'; break;
+    case 'test': say = 'テストです。残り5分'; break;
+  }
+  ls.set('state', S);
+  cues.reset();
+  if (say && (S.voice || cmd.c === 'test' || cmd.c === 'voice')) speak(say);
+  render(true);
+  pushState();
+}
+
+function inOutSpeech(){
+  const i = new Date(S.inAt), o = new Date(outAt());
+  return 'イン ' + i.getHours() + '時' + i.getMinutes() + '分。アウト ' + o.getHours() + '時' + o.getMinutes() + '分';
+}
+
+// ---------------- 読み上げ ----------------
+const MARKS = [1,2,3,4,5,6,7,8,9,10,30,60,120,180,300,600];
+for (let m = 15; m <= 180; m += 5) MARKS.push(m * 60);
+const cues = {
+  last: null,
+  reset(){ this.last = null; },
+  /** 区切りをまたいだ瞬間だけ読む（起動直後や設定変更直後は今の位置から数え始める） */
+  tick(t){
+    const ph = phase(t);
+    let key = null, text = null;
+    if (ph.p === 'run'){
+      // 残り秒数が区切り（T秒）以下になった時にTを読む。区切り＝10分より上は5分ごと・10/5/3/2/1分・30秒・10〜1秒
+      const s = Math.ceil(ph.r / 1000);
+      const T = MARKS.find(m => s <= m);
+      if (T == null) key = 'x';
+      else { key = 't' + T; text = T >= 60 ? '残り' + T / 60 + '分' : T === 30 ? '残り30秒' : String(T); }
+    } else if (ph.p === 'out'){ key = 'out'; text = 'アウトの時刻です'; }
+    else if (ph.p === 'late'){ const m = Math.floor(ph.r / 60000) + 1; key = 'late' + m; text = m + '分遅れています'; }
+    if (this.last === null){ this.last = key; return; }
+    if (key !== this.last){ this.last = key; if (text && S.voice) speak(text); }
+  }
+};
+
+function speak(text){
+  if (isApp) { N.speak(text); return; }
+  if (!('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text); u.lang = 'ja-JP'; u.rate = 1.05;
+  speechSynthesis.speak(u);
+}
+function vib(ms){ if (isApp) N.vibrate(ms); else if (navigator.vibrate) navigator.vibrate(ms); }
+
+// ---------------- 通信（アプリ＝Bluetooth／ブラウザ＝同じブラウザのタブ同士で試験） ----------------
+const bc = (!isApp && 'BroadcastChannel' in window) ? new BroadcastChannel('st-link') : null;
+
+function send(msg){
+  const line = JSON.stringify(msg);
+  if (isApp) N.btSend(line); else if (bc) bc.postMessage(line);
+}
+function pushState(){
+  if (role === 'display' && serveOn) send({t:'state', s:S, now: Date.now() + S.adj});
+}
+
+window.__btStatus = (state, detail) => { link = {state, detail}; render(); if (role === 'display' && state === 'serving') pushState(); };
+window.__btRecv = line => {
+  let m; try { m = JSON.parse(line); } catch(e) { return; }
+  if (role === 'display'){
+    if (!serveOn) return;
+    if (m.t === 'hello') pushState();
+    else if (m.t === 'cmd' && m.cmd) apply(m.cmd);
+  } else if (m.t === 'state'){
+    S = Object.assign(S, m.s);
+    remoteOff = m.now - Date.now();
+    lastStateAt = Date.now();
+    if (!isApp) link = {state:'connected', detail:'ブラウザの別タブ'};
+    render(true);
+  }
+};
+window.__btPairedReady = () => showDevices();
+if (bc) bc.onmessage = e => window.__btRecv(e.data);
+
+function startLink(){
+  if (role === 'display'){
+    if (!serveOn){ if (isApp) N.btStop(); link = {state:'idle', detail:''}; return; }
+    if (isApp) N.btServe(); else { link = {state:'serving', detail:'0'}; pushState(); }
+  } else {
+    if (isApp){
+      if (remoteAddr) N.btConnect(remoteAddr); else link = {state:'idle', detail:''};
+    } else { link = {state:'connecting', detail:''}; send({t:'hello'}); }
+  }
+}
+
+// ブラウザ試験：リモコンは状態が20秒届かなければ未接続扱い、表示端末は10秒ごとに状態を送る
+setInterval(() => {
+  if (role === 'display') pushState();
+  else if (!isApp){
+    if (Date.now() - lastStateAt > 20000){ link = {state:'connecting', detail:''}; send({t:'hello'}); render(); }
+  }
+}, 10000);
+
+// ---------------- 画面 ----------------
+let ctlOpen = false;
+
+function linkText(){
+  const s = link.state, d = link.detail;
+  if (role === 'display'){
+    if (!serveOn) return ['', '1台で使用中（リモコン受付OFF）', ''];
+    if (s === 'serving') return [+d > 0 || !isApp ? 'on' : 'wait', isApp ? 'リモコン受付中（接続 ' + d + '台）' : 'リモコン受付中（ブラウザ試験）', ''];
+    if (s === 'off') return ['err', 'BluetoothがOFFです', ''];
+    if (s === 'error') return ['err', d, ''];
+    return ['wait', '受付を準備中…', ''];
+  }
+  if (s === 'connected') return ['on', '接続中：' + (d || '表示端末'), '変更'];
+  if (s === 'connecting') return ['wait', '接続しています…' + (d ? ' ' + d : ''), isApp ? '変更' : ''];
+  if (s === 'retry') return ['wait', '表示端末を探しています（自動で再接続）', '変更'];
+  if (s === 'off') return ['err', 'BluetoothがOFFです', '接続'];
+  if (s === 'error') return ['err', d, '接続'];
+  return ['err', '表示端末を選んでください', '接続'];
+}
+
+function render(full){
+  const t = now(), ph = phase(t), o = outAt();
+  const remTxt = ph.p === 'idle' ? '--:--' : ph.p === 'late' ? '+' + dur(ph.r) : dur(ph.r);
+  const remLab = ph.p === 'idle' ? 'IN待ち' : ph.p === 'run' ? 'OUTまで' : ph.p === 'out' ? 'OUTの時刻（この分のうちにOUT）' : '遅れ';
+  let cls = ph.p === 'idle' ? 'idle' : ph.p === 'out' ? 'out' : ph.p === 'late' ? 'late' : ph.r <= 60000 ? 'bad' : ph.r <= 300000 ? 'warn' : '';
+
+  // 表示画面
+  setFit('#dIn', S.inAt == null ? '--:--' : hm(S.inAt));
+  setFit('#dOut', o == null ? '--:--' : hm(o));
+  setFit('#dRem', remTxt);
+  $('#dRemLab').textContent = remLab;
+  $('#rem').className = 'cell ' + cls;
+  $('#dCar').textContent = (S.car ? 'No.' + S.car + '　' : '') + 'サービス ' + S.dur + '分';
+  $('#dClock').textContent = hms(t);
+  const [lc] = linkText();
+  $('#dLink').textContent = role === 'display' && serveOn ? (lc === 'on' ? '● リモコン' : lc === 'err' ? '× リモコン' : '○ リモコン') : '';
+
+  // 操作パネル
+  $('#mIn').textContent = S.inAt == null ? '--:--' : hm(S.inAt);
+  $('#mOut').textContent = o == null ? '--:--' : hm(o);
+  $('#mRem').textContent = remTxt;
+  $('#mRemLab').textContent = remLab.replace(/（.*/, '');
+  $('#mini').className = cls;
+  if (!full && !ctlOpen) return;
+
+  const [c, msg, btn] = linkText();
+  $('#link').className = c;
+  $('#linkMsg').textContent = msg;
+  $('#linkBtn').textContent = btn;
+  $('#linkBtn').classList.toggle('hide', !btn);
+  $('#ops').classList.toggle('disabled', role === 'remote' && link.state !== 'connected');
+  $$('#durs button').forEach(b => b.classList.toggle('sel', +b.dataset.v === S.dur || (b.dataset.v === 'x' && !DURS.includes(S.dur))));
+  const bx = $('#durs button[data-v="x"]'); bx.textContent = DURS.includes(S.dur) ? 'その他' : S.dur + '分';
+  $('#bCar').textContent = S.car ? 'ゼッケン ' + S.car : 'ゼッケン';
+  $('#bVoice').textContent = '読み上げ ' + (S.voice ? 'ON' : 'OFF');
+  $('#bVoice').classList.toggle('sel', S.voice);
+  $('#adjV').textContent = (S.adj >= 0 ? '+' : '') + (S.adj / 1000).toFixed(0) + '秒';
+  $$('[data-role]').forEach(b => b.classList.toggle('sel', b.dataset.role === role));
+  $$('[data-serve]').forEach(b => b.classList.toggle('sel', (b.dataset.serve === '1') === serveOn));
+  $$('[data-ori]').forEach(b => b.classList.toggle('sel', b.dataset.ori === ori));
+  $('#setServe').classList.toggle('hide', role !== 'display');
+  $('#ctlClose').classList.toggle('hide', role !== 'display');
+  $('#mini').classList.toggle('hide', role === 'display');
+  $('#link').classList.toggle('hide', role === 'display' && !serveOn);
+  $('#roleNote').textContent = role === 'display'
+    ? 'この端末でIN・OUT・残り時間を表示して読み上げます。1台だけでも使えます。'
+    : 'この端末はリモコンです。表示と読み上げは、つないだ端末（テントのタブレットなど）で行います。';
+}
+
+/** 枠いっぱいに数字を出す（文字数が変わった時と画面サイズが変わった時だけ測り直す） */
+function setFit(sel, txt){
+  const el = $(sel);
+  if (el.textContent !== txt){
+    const relen = el.textContent.length !== txt.length;
+    el.textContent = txt;
+    if (relen) fit(el);
+  }
+}
+function fit(el){
+  const box = el.parentElement, h = box.clientHeight, w = box.clientWidth;
+  if (!h || !w) return;
+  let fs = h * 0.92;
+  el.style.fontSize = fs + 'px';
+  const sw = el.scrollWidth;
+  if (sw > w * 0.96) fs = fs * (w * 0.96) / sw;
+  el.style.fontSize = Math.floor(fs) + 'px';
+}
+function fitAll(){ $$('.fit').forEach(fit); }
+
+function showCtl(on){
+  ctlOpen = on || role === 'remote';
+  $('#ctl').classList.toggle('hide', !ctlOpen);
+  $('#disp').classList.toggle('hide', role === 'remote');
+  render(true);
+  if (!ctlOpen) requestAnimationFrame(fitAll);
+}
+
+let toastTimer;
+function toast(msg){
+  const el = $('#toast'); el.textContent = msg; el.classList.remove('hide');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.add('hide'), 2500);
+}
+
+// ---------------- テンキー ----------------
+const kp = {
+  mode:null, buf:'', done:null,
+  open(mode, title, done){
+    this.mode = mode; this.buf = ''; this.done = done;
+    $('#kpTtl').textContent = title; $('#kp').classList.remove('hide'); this.show();
+  },
+  max(){ return this.mode === 'time' ? 4 : this.mode === 'min' ? 3 : 4; },
+  show(){
+    let html;
+    if (this.mode === 'time'){
+      const d = (this.buf + '____').slice(0, 4);
+      html = [...d].map((ch, i) => (ch === '_' ? '<span class="ph">0</span>' : ch) + (i === 1 ? ':' : '')).join('');
+    } else html = this.buf || '<span class="ph">' + (this.mode === 'min' ? '分' : '番号') + '</span>';
+    $('#kpVal').innerHTML = html;
+  },
+  key(k){
+    if (k === 'cancel'){ $('#kp').classList.add('hide'); return; }
+    if (k === 'bs'){ this.buf = this.buf.slice(0, -1); this.show(); return; }
+    if (k === 'ok'){
+      const r = this.done(this.buf);
+      if (r === false) return;
+      $('#kp').classList.add('hide'); return;
+    }
+    if (this.buf.length < this.max()) this.buf += k;
+    this.show();
+    if (this.mode === 'time' && this.buf.length === 4) this.key('ok');
+  }
+};
+$$('#kp button').forEach(b => b.addEventListener('click', () => kp.key(b.dataset.k || b.textContent)));
+
+// ---------------- 接続先の選択（リモコン） ----------------
+function showDevices(){
+  $('#dev').classList.remove('hide');
+  const list = $('#devList');
+  if (!isApp){
+    list.innerHTML = '<div class="note">ブラウザでは、同じブラウザの別タブ（?role=display）とつながります。</div>';
+    return;
+  }
+  let devs = [];
+  try { devs = JSON.parse(N.btPaired()); } catch(e) {}
+  list.innerHTML = devs.length ? '' : '<div class="note">ペアリング済みの端末がありません。</div>';
+  devs.forEach(d => {
+    const b = document.createElement('button');
+    b.textContent = d.name + (d.address === remoteAddr ? '（前回の接続先）' : '');
+    b.onclick = () => {
+      remoteAddr = d.address; ls.set('addr', remoteAddr);
+      $('#dev').classList.add('hide');
+      N.btConnect(remoteAddr);
+    };
+    list.appendChild(b);
+  });
+}
+$('#devReload').onclick = showDevices;
+$('#devSettings').onclick = () => isApp ? N.openBtSettings() : toast('アプリ版のみ');
+$('#devClose').onclick = () => $('#dev').classList.add('hide');
+$('#linkBtn').onclick = () => { if (role === 'remote') showDevices(); };
+
+// ---------------- ボタン ----------------
+$('#disp').addEventListener('click', () => showCtl(true));
+$('#ctlClose').onclick = () => showCtl(false);
+$('#bIn').onclick = () => act({c:'in'});
+$$('[data-cmd]').forEach(b => b.onclick = () => act(JSON.parse(b.dataset.cmd)));
+$('#bInKey').onclick = () => kp.open('time', 'IN時刻（時・分の4桁　例：0930）', v => {
+  if (v.length !== 4) { toast('4桁で入力してください'); return false; }
+  const h = +v.slice(0, 2), m = +v.slice(2);
+  if (h > 23 || m > 59) { toast('時刻が正しくありません'); return false; }
+  act({c:'inAt', h, m});
+});
+const durs = $('#durs');
+[...DURS, 'x'].forEach(v => {
+  const b = document.createElement('button');
+  b.dataset.v = v; b.textContent = v === 'x' ? 'その他' : v + '分';
+  b.onclick = () => v === 'x'
+    ? kp.open('min', 'サービス時間（分）', s => { const n = +s; if (!n || n > 600) { toast('分で入力してください'); return false; } act({c:'dur', v:n}); })
+    : act({c:'dur', v});
+  durs.appendChild(b);
+});
+$('#bCar').onclick = () => kp.open('car', 'ゼッケン（空でOKを押すと消す）', v => act({c:'car', v}));
+$('#bVoice').onclick = () => act({c:'voice', v: !S.voice});
+$('#bTest').onclick = () => act({c:'test'});
+
+// リセットは長押し（1秒）
+(() => {
+  const b = $('#bReset'); let tm;
+  const start = e => { e.preventDefault(); b.style.filter = 'brightness(1.6)'; tm = setTimeout(() => { b.style.filter = ''; act({c:'reset'}); vib(80); }, 1000); };
+  const stop = () => { clearTimeout(tm); b.style.filter = ''; };
+  b.addEventListener('pointerdown', start);
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, stop));
+})();
+
+$$('[data-role]').forEach(b => b.onclick = () => {
+  if (b.dataset.role === role) return;
+  role = b.dataset.role;
+  if (!roleFixed) ls.set('role', role);
+  if (isApp) N.btStop();
+  link = {state:'idle', detail:''};
+  cues.reset();
+  if (role === 'display') S = Object.assign({car:'', inAt:null, dur:30, adj:0, voice:true}, ls.get('state', {}));
+  startLink();
+  showCtl(role === 'display');
+  if (role === 'remote' && isApp && !remoteAddr) showDevices();
+});
+$$('[data-serve]').forEach(b => b.onclick = () => {
+  serveOn = b.dataset.serve === '1'; ls.set('serve', serveOn);
+  startLink(); render(true);
+});
+$$('[data-ori]').forEach(b => b.onclick = () => { ori = b.dataset.ori; ls.set('ori', ori); applyOri(); render(true); });
+function applyOri(){
+  if (isApp) N.setOrientation(ori);
+  else if (screen.orientation && screen.orientation.lock && ori !== 'any') screen.orientation.lock(ori).catch(() => {});
+}
+
+// ---------------- 起動 ----------------
+let wake = null;
+async function keepAwake(){
+  if (isApp || !('wakeLock' in navigator)) return;
+  try { wake = await navigator.wakeLock.request('screen'); } catch(e) {}
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') keepAwake(); });
+
+$('#ver').textContent = 'サービスタイマー ' + VERSION + (isApp ? '（アプリ ' + N.version() + '）' : '（Web版）') + '　SERAPHIX';
+window.addEventListener('resize', () => { fitAll(); });
+applyOri();
+keepAwake();
+startLink();
+showCtl(false);
+fitAll();
+setInterval(() => {
+  render();
+  if (role === 'display') cues.tick(now());
+}, 200);
+</script>
+</body>
+</html>
