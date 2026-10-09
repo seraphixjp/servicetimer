@@ -222,6 +222,8 @@ body.night #disp{filter:brightness(.6)}
     <button data-gps="1">ON</button><button data-gps="0">OFF</button></span></div>
   <div class="set"><span>読み上げの声<br><span class="note" id="voiceNote"></span></span><span class="opts">
     <span id="voiceOpts"></span><button data-voice="tts">端末の音声</button></span></div>
+  <div class="set" id="setMaxVol"><span>音量を最大にする<br><span class="note">アプリ版：起動時とお知らせの前に端末のメディア音量を最大へ</span></span><span class="opts">
+    <button data-maxvol="1">ON</button><button data-maxvol="0">OFF</button></span></div>
   <div class="set" id="setBright"><span>画面の明るさ</span><span class="opts">
     <button data-bright="max">最大</button><button data-bright="auto">端末のまま</button><button data-bright="night">夜間</button></span></div>
   <div class="note" id="roleNote"></div>
@@ -254,7 +256,7 @@ body.night #disp{filter:brightness(.6)}
 
 <script>
 'use strict';
-const VERSION = '0.7.2';
+const VERSION = '0.7.3';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const N = window.ST || null;                 // アプリ版の橋渡し（ブラウザでは無し）
@@ -283,6 +285,7 @@ let joinCode = ls.get('join', null);       // リモコン側：つなぐ表示�
 let ori = ls.get('ori', 'any');
 let gpsUse = ls.get('gps', true);
 let bright = ls.get('bright', 'max');
+let maxVol = ls.get('maxvol', true);
 let voiceSel = ls.get('voice', null);     // 声のID（VOICEVOXの話者ID）／'tts'＝端末の音声
 let remoteAddr = ls.get('addr', null);
 let link = {state:'idle', detail:''};
@@ -423,6 +426,7 @@ const cues = {
 let speakTimer = null, actx = null, testIdx = 0, voiceSrcs = [];
 function speak(parts, sound){
   clearTimeout(speakTimer);
+  boostVolume();
   const list = Array.isArray(parts) ? parts : [parts];
   const go = () => playVoice(list) || say(list.join(''));
   if (!sound){ go(); return; }
@@ -456,6 +460,8 @@ async function loadVoice(){
     render(true);
   } catch(e) { render(true); }
 }
+/** 表示端末でONなら、端末のメディア音量を最大に（アプリ版のみ） */
+function boostVolume(){ if (isApp && maxVol && role === 'display' && N.maxVolume) N.maxVolume(); }
 function ac(){
   actx = actx || new (window.AudioContext || window.webkitAudioContext)();
   if (actx.state === 'suspended') actx.resume();
@@ -505,7 +511,7 @@ function playSound(name){
     ac();
     snd.notes.forEach(([f, at, len, type]) => {
       const o = actx.createOscillator(), g = actx.createGain(), t0 = actx.currentTime + at;
-      const vol = type === 'square' ? 0.18 : 0.5;     // 矩形波は耳に刺さるので小さめ
+      const vol = type === 'square' ? 0.4 : 0.95;     // 声に負けない大きさ（矩形波は同じ値でも大きく聞こえるので控えめ）
       o.type = type; o.frequency.value = f;
       g.gain.setValueAtTime(0.0001, t0);
       g.gain.exponentialRampToValueAtTime(vol, t0 + 0.01);
@@ -774,6 +780,8 @@ function render(full){
   $$('[data-ori]').forEach(b => b.classList.toggle('sel', b.dataset.ori === ori));
   $$('[data-gps]').forEach(b => b.classList.toggle('sel', (b.dataset.gps === '1') === gpsUse));
   $$('[data-bright]').forEach(b => b.classList.toggle('sel', b.dataset.bright === bright));
+  $$('[data-maxvol]').forEach(b => b.classList.toggle('sel', (b.dataset.maxvol === '1') === maxVol));
+  $('#setMaxVol').classList.toggle('hide', !isApp || role !== 'display');
   $$('[data-voice]').forEach(b => b.classList.toggle('sel', b.dataset.voice === voiceSel));
   $('#voiceNote').textContent = !VOICE.packs.length ? '録音の声が見つかりません（端末の音声で読みます）'
     : voiceSel === 'tts' ? '端末の読み上げ機能を使います' : VOICE.ready ? '「音のテスト」で試聴できます' : '読み込み中…';
@@ -955,6 +963,7 @@ $$('[data-serve]').forEach(b => b.onclick = () => {
 $$('[data-ori]').forEach(b => b.onclick = () => { ori = b.dataset.ori; ls.set('ori', ori); applyOri(); render(true); });
 $$('[data-gps]').forEach(b => b.onclick = () => { gpsUse = b.dataset.gps === '1'; ls.set('gps', gpsUse); applyGps(); cues.reset(); render(true); pushState(); });
 $('[data-voice="tts"]').onclick = () => { voiceSel = 'tts'; ls.set('voice', voiceSel); render(true); };
+$$('[data-maxvol]').forEach(b => b.onclick = () => { maxVol = b.dataset.maxvol === '1'; ls.set('maxvol', maxVol); boostVolume(); render(true); });
 $$('[data-bright]').forEach(b => b.onclick = () => { bright = b.dataset.bright; ls.set('bright', bright); applyBright(); render(true); });
 /** GPS時刻の受信は「表示する端末」でONの時だけ（リモコンは表示端末の時計に合わせる） */
 function applyGps(){ if (isApp) N.gpsClock(role === 'display' && gpsUse); }
@@ -980,6 +989,7 @@ $('#ver').textContent = 'サービスタイマー ' + VERSION + (isApp ? '（ア
 fetch('voice/packs.json').then(r => r.json()).then(p => { $('#ver').textContent += '　音声：' + p.map(x => x.credit).join('、'); }).catch(() => {});
 window.addEventListener('resize', () => { fitAll(); });
 loadVoice();
+boostVolume();
 // Web版：電波が無くても開けるように（アプリ版は中に入っているので不要）
 if (!isApp && 'serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(() => {});
 applyOri();
