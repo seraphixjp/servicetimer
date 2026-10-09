@@ -47,9 +47,7 @@ button:disabled{opacity:.35}
 .cell .lab{position:absolute;left:2vmin;top:1.2vmin;z-index:1;font:700 3.4vmin/1 "Barlow C","Noto Sans JP",sans-serif;letter-spacing:.1em;color:var(--accent)}
 .box{position:absolute;left:1.5vmin;right:1.5vmin;top:4.6vmin;bottom:1.2vmin}
 .fit{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;white-space:nowrap;line-height:1;color:#eef2f6}
-.fit .sg{position:relative;font-family:"DSEG7",monospace;font-weight:700;text-shadow:0 0 .12em rgba(255,255,255,.18)}
-.fit .gh{position:absolute;left:0;top:0;color:rgba(255,255,255,.06);text-shadow:none}   /* 消えているセグメントを薄く */
-.fit .pl{font:800 .8em/1 "Barlow C",sans-serif;margin-right:.08em}
+.fit .sg{position:relative;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em}   /* 大きい数字は端末の太字（元のデザイン） */
 /* サービス中の「サービスOUT」はラベル左・数字右の横長 */
 #io.single .cell .lab{top:50%;transform:translateY(-50%);font-size:4.2vmin}
 #io.single .box{left:24vmin;top:1.6vmin;bottom:1.6vmin}
@@ -72,10 +70,7 @@ button:disabled{opacity:.35}
 @keyframes bgblink{50%{background:#3a0000}}
 @keyframes bgblink2{50%{background:#5a4500}}
 #disp:not(.idle) #rem .fit{color:#fff}
-#disp:not(.idle) #rem .sg{text-shadow:0 0 .1em rgba(255,255,255,.35)}
 #disp.warn #rem .fit,#disp.wait #rem .fit{color:#000}
-#disp.warn #rem .sg,#disp.wait #rem .sg{text-shadow:none}
-#disp.warn #rem .gh,#disp.wait #rem .gh{color:rgba(0,0,0,.08)}
 #disp.warn #rem .lab,#disp.wait #rem .lab,#disp.warn #hint,#disp.wait #hint{color:rgba(0,0,0,.7)}
 #disp.warn #prog i{background:#000} #disp.warn #prog .tk{background:rgba(0,0,0,.5)}
 #mini.pre .rv{color:#8fc1ff} #mini.wait .rv{color:var(--warn)}
@@ -106,8 +101,8 @@ body.night #disp{filter:brightness(.6)}
 .sel{background:var(--accent);color:#000}
 .danger{background:#4a1d1d;color:#ffb3b3}
 #mini{border:2px solid var(--line);border-radius:14px;padding:10px 14px;display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:6px;align-items:end}
-#mini .k{font-size:13px;color:var(--dim)} #mini .v{font-size:24px;font-family:"DSEG7",monospace;margin-top:6px}
-#mini .rv{font-size:32px;font-family:"DSEG7",monospace;margin-top:6px}
+#mini .k{font-size:13px;color:var(--dim)} #mini .v{font-size:30px}
+#mini .rv{font-size:40px}
 #mini.warn .rv{color:var(--warn)} #mini.bad .rv,#mini.late .rv{color:var(--bad)} #mini.out .rv{color:var(--ok)}
 #link{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;background:var(--panel);font-size:16px}
 #link .dot{width:14px;height:14px;border-radius:50%;background:var(--dim);flex:none}
@@ -239,7 +234,7 @@ body.night #disp{filter:brightness(.6)}
 
 <script>
 'use strict';
-const VERSION = '0.5.0';
+const VERSION = '0.5.1';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const N = window.ST || null;                 // アプリ版の橋渡し（ブラウザでは無し）
@@ -628,9 +623,7 @@ function setFit(sel, txt){
   if (el.dataset.t === txt) return;
   const relen = (el.dataset.t || '').length !== txt.length;
   el.dataset.t = txt;
-  const plus = txt[0] === '+', d = plus ? txt.slice(1) : txt;
-  const ghost = d.replace(/[0-9-]/g, '8');
-  el.innerHTML = (plus ? '<span class="pl">+</span>' : '') + '<span class="sg"><span class="gh">' + ghost + '</span>' + d + '</span>';
+  el.innerHTML = '<span class="sg">' + txt + '</span>';
   if (relen) fit(el);
 }
 function fit(el){
