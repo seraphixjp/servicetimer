@@ -37,6 +37,9 @@ button:disabled{opacity:.35}
 #rem.out{border-color:var(--ok)} #rem.out .fit{color:var(--ok)}
 #rem.late .fit{color:var(--bad);animation:blink 1s steps(2) infinite}
 #rem.idle .fit{color:var(--dim)}
+#rem.pre{border-color:#3d7bd9} #rem.pre .fit{color:#8fc1ff}
+#rem.wait{border-color:var(--warn)} #rem.wait .fit{color:var(--warn);animation:blink 1s steps(2) infinite}
+#mini.pre .rv{color:#8fc1ff} #mini.wait .rv{color:var(--warn)}
 @keyframes blink{50%{opacity:.35}}
 #hint{position:absolute;right:2vmin;bottom:1.2vmin;font-size:2.6vmin;color:var(--dim)}
 @media (orientation:portrait){
@@ -94,8 +97,8 @@ button:disabled{opacity:.35}
     <div class="right"><span id="dLink"></span><span class="num" id="dClock"></span></div>
   </div>
   <div id="io">
-    <div class="cell"><div class="lab">サービス IN</div><div class="box"><div class="fit num" id="dIn">--:--</div></div></div>
-    <div class="cell" id="cellOut"><div class="lab">サービス OUT</div><div class="box"><div class="fit num" id="dOut">--:--</div></div></div>
+    <div class="cell"><div class="lab" id="dInLab">サービス IN</div><div class="box"><div class="fit num" id="dIn">--:--</div></div></div>
+    <div class="cell" id="cellOut"><div class="lab" id="dOutLab">サービス OUT</div><div class="box"><div class="fit num" id="dOut">--:--</div></div></div>
   </div>
   <div class="cell" id="rem"><div class="lab" id="dRemLab">OUTまで</div><div class="box"><div class="fit num" id="dRem">--:--</div></div>
     <div id="hint">画面をタップで操作</div></div>
@@ -106,12 +109,19 @@ button:disabled{opacity:.35}
   <button id="ctlClose" class="mid">✕ 閉じて表示に戻る</button>
   <div id="link"><span class="dot"></span><span class="msg" id="linkMsg"></span><button id="linkBtn"></button></div>
   <div id="mini">
-    <div><div class="k">IN</div><div class="v num" id="mIn">--:--</div></div>
-    <div><div class="k">OUT</div><div class="v num" id="mOut">--:--</div></div>
+    <div><div class="k" id="mInLab">IN</div><div class="v num" id="mIn">--:--</div></div>
+    <div><div class="k" id="mOutLab">OUT</div><div class="v num" id="mOut">--:--</div></div>
     <div><div class="k" id="mRemLab">OUTまで</div><div class="rv num" id="mRem">--:--</div></div>
   </div>
 
   <div id="ops">
+    <h2>IN予定（サービス前は「INまで」を表示）</h2>
+    <div class="row">
+      <button class="mid" data-cmd='{"c":"planAdj","v":-1}'>予定 −1分</button>
+      <button class="mid" id="bPlanKey">IN予定を入力</button>
+      <button class="mid" data-cmd='{"c":"planAdj","v":1}'>予定 ＋1分</button>
+    </div>
+    <h2>到着したら</h2>
     <button class="big go" id="bIn" style="width:100%">IN（今の時刻）</button>
     <div class="row" style="margin-top:10px">
       <button class="mid" data-cmd='{"c":"inAdj","v":-1}'>IN −1分</button>
@@ -135,7 +145,7 @@ button:disabled{opacity:.35}
       <div class="mid num" id="adjV" style="display:flex;align-items:center;justify-content:center"></div>
       <button class="mid" data-cmd='{"c":"adj","v":1000}'>＋1秒</button>
     </div>
-    <button class="mid danger" id="bReset" style="width:100%;margin-top:16px">長押しでリセット（IN・OUTを消す）</button>
+    <button class="mid danger" id="bReset" style="width:100%;margin-top:16px">長押しでリセット（IN予定・IN・OUTを消す）</button>
   </div>
 
   <h2>設定</h2>
@@ -175,7 +185,7 @@ button:disabled{opacity:.35}
 
 <script>
 'use strict';
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const N = window.ST || null;                 // アプリ版の橋渡し（ブラウザでは無し）
@@ -192,7 +202,7 @@ const ls = {
 // 役割：display＝この端末で表示（1台で完結。受付ONでリモコンからも操作できる）／remote＝別の表示端末を操作
 const roleFixed = params.get('role');        // ブラウザで2タブ試験するとき ?role=remote
 let role = roleFixed || ls.get('role', 'display');
-let S = Object.assign({car:'', inAt:null, dur:30, adj:0, voice:true}, ls.get('state', {}));
+let S = Object.assign({car:'', planIn:null, inAt:null, dur:30, adj:0, voice:true}, ls.get('state', {}));
 let serveOn = ls.get('serve', false);
 let ori = ls.get('ori', 'any');
 let remoteAddr = ls.get('addr', null);
@@ -210,10 +220,14 @@ function dur(ms){
   return (h ? h + ':' + pad(m) : String(m).padStart(2, '0')) + ':' + pad(s % 60);
 }
 
-/** 今の局面：idle（IN前）／run（OUTまで）／out（OUTの分の中）／late（遅れ） */
+/** 今の局面：idle（未設定）／pre（IN予定まで）／wait（IN予定を過ぎて到着待ち）／run（OUTまで）／out（OUTの分の中）／late（遅れ） */
 function phase(t){
   const o = outAt();
-  if (o == null) return {p:'idle'};
+  if (o == null){
+    if (S.planIn == null) return {p:'idle'};
+    const r = S.planIn - t;
+    return r > 0 ? {p:'pre', r} : {p:'wait', r: -r};
+  }
   const r = o - t;
   if (r > 0) return {p:'run', r};
   if (r > -60000) return {p:'out', r: 60000 + r};
@@ -238,32 +252,36 @@ function apply(cmd){
     case 'in':
       S.inAt = Math.floor(t / 60000) * 60000;
       say = inOutSpeech(); break;
-    case 'inAt': {
-      const d = new Date(t); d.setHours(cmd.h, cmd.m, 0, 0);
-      let v = d.getTime();
-      if (v - t > 12 * 3600000) v -= 86400000;
-      if (t - v > 12 * 3600000) v += 86400000;
-      S.inAt = v; say = inOutSpeech(); break;
-    }
+    case 'inAt': S.inAt = atToday(t, cmd.h, cmd.m); say = inOutSpeech(); break;
+    case 'planAt': S.planIn = atToday(t, cmd.h, cmd.m); say = planSpeech(); break;
+    case 'planAdj': if (S.planIn != null){ S.planIn += cmd.v * 60000; say = planSpeech(); } break;
     case 'inAdj': if (S.inAt != null){ S.inAt += cmd.v * 60000; say = inOutSpeech(); } break;
-    case 'dur': S.dur = cmd.v; say = S.inAt != null ? inOutSpeech() : 'サービス' + cmd.v + '分'; break;
+    case 'dur': S.dur = cmd.v; say = S.inAt != null ? inOutSpeech() : 'サービス時間は' + cmd.v + '分です。'; break;
     case 'car': S.car = cmd.v; break;
-    case 'voice': S.voice = cmd.v; if (cmd.v) say = '読み上げオン'; break;
+    case 'voice': S.voice = cmd.v; if (cmd.v) say = '読み上げをオンにしました。'; break;
     case 'adj': S.adj += cmd.v; break;
-    case 'reset': S.inAt = null; say = 'リセットしました'; break;
-    case 'test': say = 'テストです。残り5分'; break;
+    case 'reset': S.inAt = null; S.planIn = null; say = 'リセットしました。'; break;
+    case 'test': say = '読み上げのテストです。アウトまで、あと5分です。'; break;
   }
   ls.set('state', S);
   cues.reset();
-  if (say && (S.voice || cmd.c === 'test' || cmd.c === 'voice')) speak(say);
+  if (say && (S.voice || cmd.c === 'test' || cmd.c === 'voice')) speak(say, true);
   render(true);
   pushState();
 }
 
-function inOutSpeech(){
-  const i = new Date(S.inAt), o = new Date(outAt());
-  return 'イン ' + i.getHours() + '時' + i.getMinutes() + '分。アウト ' + o.getHours() + '時' + o.getMinutes() + '分';
+/** 今日のh:m（12時間以上離れていれば前日・翌日とみなす） */
+function atToday(t, h, m){
+  const d = new Date(t); d.setHours(h, m, 0, 0);
+  let v = d.getTime();
+  if (v - t > 12 * 3600000) v -= 86400000;
+  if (t - v > 12 * 3600000) v += 86400000;
+  return v;
 }
+/** 読み上げ用の時刻「9時30分」「10時ちょうど」 */
+function jt(ms){ const d = new Date(ms); return d.getHours() + '時' + (d.getMinutes() ? d.getMinutes() + '分' : 'ちょうど'); }
+function planSpeech(){ return 'サービスインの予定は、' + jt(S.planIn) + 'です。'; }
+function inOutSpeech(){ return 'サービスイン、' + jt(S.inAt) + '。アウトは、' + jt(outAt()) + 'です。'; }
 
 // ---------------- 読み上げ ----------------
 const MARKS = [1,2,3,4,5,6,7,8,9,10,30,60,120,180,300,600];
@@ -274,26 +292,62 @@ const cues = {
   /** 区切りをまたいだ瞬間だけ読む（起動直後や設定変更直後は今の位置から数え始める） */
   tick(t){
     const ph = phase(t);
-    let key = null, text = null;
-    if (ph.p === 'run'){
+    let key = null, text = null, chime = false;
+    if (ph.p === 'run' || ph.p === 'pre'){
       // 残り秒数が区切り（T秒）以下になった時にTを読む。区切り＝10分より上は5分ごと・10/5/3/2/1分・30秒・10〜1秒
       const s = Math.ceil(ph.r / 1000);
-      const T = MARKS.find(m => s <= m);
-      if (T == null) key = 'x';
-      else { key = 't' + T; text = T >= 60 ? '残り' + T / 60 + '分' : T === 30 ? '残り30秒' : String(T); }
-    } else if (ph.p === 'out'){ key = 'out'; text = 'アウトの時刻です'; }
-    else if (ph.p === 'late'){ const m = Math.floor(ph.r / 60000) + 1; key = 'late' + m; text = m + '分遅れています'; }
+      // IN前は分のお知らせだけ（車はその秒に着くわけではないので秒読みしない）
+      const T = MARKS.find(m => s <= m && (ph.p === 'run' || m >= 60));
+      const head = ph.p === 'pre' ? 'サービスインまで、あと' : 'アウトまで、あと';
+      if (T == null) key = ph.p + 'x';
+      else {
+        key = ph.p + T;
+        text = T >= 60 ? head + T / 60 + '分です。' : T === 30 ? head + '30秒です。' : String(T);
+        chime = T >= 30;            // 分・30秒のお知らせはチャイム付き、秒読みは数字だけ
+      }
+    }
+    else if (ph.p === 'wait'){ key = 'wait'; text = 'サービスインの予定時刻になりました。'; chime = true; } else if (ph.p === 'out'){ key = 'out'; text = 'アウトの時間です。'; chime = true; }
+    else if (ph.p === 'late'){ const m = Math.floor(ph.r / 60000) + 1; key = 'late' + m; text = 'アウトの時間から、' + m + '分遅れています。'; chime = true; }
     if (this.last === null){ this.last = key; return; }
-    if (key !== this.last){ this.last = key; if (text && S.voice) speak(text); }
+    if (key !== this.last){ this.last = key; if (text && S.voice) speak(text, chime); }
   }
 };
 
-function speak(text){
+/** 読み上げ。chime=true なら「ピンポン」を鳴らしてから読む */
+let speakTimer = null, actx = null;
+function speak(text, chime){
+  clearTimeout(speakTimer);
+  if (!chime){ say(text); return; }
+  ding();
+  speakTimer = setTimeout(() => say(text), 750);
+}
+function say(text){
   if (isApp) { N.speak(text); return; }
   if (!('speechSynthesis' in window)) return;
   speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text); u.lang = 'ja-JP'; u.rate = 1.05;
+  const u = new SpeechSynthesisUtterance(text); u.lang = 'ja-JP'; u.rate = 1.0;
+  const v = bestVoice(); if (v) u.voice = v;
   speechSynthesis.speak(u);
+}
+/** ブラウザの日本語の声から自然なもの（Google・Natural・Online）を優先 */
+function bestVoice(){
+  const vs = speechSynthesis.getVoices().filter(v => /^ja/i.test(v.lang));
+  return vs.find(v => /natural|online|google/i.test(v.name)) || vs[0] || null;
+}
+/** 2音のチャイム（ピン↑ポン↓） */
+function ding(){
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    [[880, 0], [698.5, 0.28]].forEach(([f, at]) => {
+      const o = actx.createOscillator(), g = actx.createGain(), t0 = actx.currentTime + at;
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.5, t0 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.6);
+      o.connect(g).connect(actx.destination); o.start(t0); o.stop(t0 + 0.65);
+    });
+  } catch(e) {}
 }
 function vib(ms){ if (isApp) N.vibrate(ms); else if (navigator.vibrate) navigator.vibrate(ms); }
 
@@ -367,13 +421,20 @@ function linkText(){
 
 function render(full){
   const t = now(), ph = phase(t), o = outAt();
-  const remTxt = ph.p === 'idle' ? '--:--' : ph.p === 'late' ? '+' + dur(ph.r) : dur(ph.r);
-  const remLab = ph.p === 'idle' ? 'IN待ち' : ph.p === 'run' ? 'OUTまで' : ph.p === 'out' ? 'OUTの時刻（この分のうちにOUT）' : '遅れ';
-  let cls = ph.p === 'idle' ? 'idle' : ph.p === 'out' ? 'out' : ph.p === 'late' ? 'late' : ph.r <= 60000 ? 'bad' : ph.r <= 300000 ? 'warn' : '';
+  const remTxt = ph.p === 'idle' ? '--:--' : (ph.p === 'late' || ph.p === 'wait') ? '+' + dur(ph.r) : dur(ph.r);
+  const remLab = {idle:'IN予定を入れるか、到着したらIN', pre:'サービスINまで', wait:'IN予定を過ぎています（到着したらIN）',
+    run:'OUTまで', out:'OUTの時刻（この分のうちにOUT）', late:'遅れ'}[ph.p];
+  const cls = ph.p === 'idle' ? 'idle' : ph.p === 'pre' ? 'pre' : ph.p === 'wait' ? 'wait' : ph.p === 'out' ? 'out' : ph.p === 'late' ? 'late'
+    : ph.r <= 60000 ? 'bad' : ph.r <= 300000 ? 'warn' : '';
+  // IN前は予定のIN・OUT（予定IN＋サービス時間）を出す
+  const planned = S.inAt == null && S.planIn != null;
+  const inT = S.inAt ?? S.planIn, outT = o ?? (S.planIn != null ? S.planIn + S.dur * 60000 : null);
+  const inLab = planned ? 'サービス IN（予定）' : 'サービス IN', outLab = planned ? 'サービス OUT（予定）' : 'サービス OUT';
 
   // 表示画面
-  setFit('#dIn', S.inAt == null ? '--:--' : hm(S.inAt));
-  setFit('#dOut', o == null ? '--:--' : hm(o));
+  setFit('#dIn', inT == null ? '--:--' : hm(inT));
+  setFit('#dOut', outT == null ? '--:--' : hm(outT));
+  $('#dInLab').textContent = inLab; $('#dOutLab').textContent = outLab;
   setFit('#dRem', remTxt);
   $('#dRemLab').textContent = remLab;
   $('#rem').className = 'cell ' + cls;
@@ -384,10 +445,11 @@ function render(full){
   $('#dLink').style.color = lc === 'on' ? 'var(--ok)' : lc === 'err' ? 'var(--bad)' : '';
 
   // 操作パネル
-  $('#mIn').textContent = S.inAt == null ? '--:--' : hm(S.inAt);
-  $('#mOut').textContent = o == null ? '--:--' : hm(o);
+  $('#mIn').textContent = inT == null ? '--:--' : hm(inT);
+  $('#mOut').textContent = outT == null ? '--:--' : hm(outT);
+  $('#mInLab').textContent = planned ? 'IN予定' : 'IN'; $('#mOutLab').textContent = planned ? 'OUT予定' : 'OUT';
   $('#mRem').textContent = remTxt;
-  $('#mRemLab').textContent = remLab.replace(/（.*/, '');
+  $('#mRemLab').textContent = ph.p === 'idle' ? 'IN待ち' : ph.p === 'wait' ? 'IN予定から' : remLab.replace(/（.*/, '');
   $('#mini').className = cls;
   if (!full && !ctlOpen) return;
 
@@ -514,6 +576,12 @@ $('#disp').addEventListener('click', () => showCtl(true));
 $('#ctlClose').onclick = () => showCtl(false);
 $('#bIn').onclick = () => act({c:'in'});
 $$('[data-cmd]').forEach(b => b.onclick = () => act(JSON.parse(b.dataset.cmd)));
+$('#bPlanKey').onclick = () => kp.open('time', 'IN予定時刻（時・分の4桁　例：0930）', v => {
+  if (v.length !== 4) { toast('4桁で入力してください'); return false; }
+  const h = +v.slice(0, 2), m = +v.slice(2);
+  if (h > 23 || m > 59) { toast('時刻が正しくありません'); return false; }
+  act({c:'planAt', h, m});
+});
 $('#bInKey').onclick = () => kp.open('time', 'IN時刻（時・分の4桁　例：0930）', v => {
   if (v.length !== 4) { toast('4桁で入力してください'); return false; }
   const h = +v.slice(0, 2), m = +v.slice(2);
@@ -549,7 +617,7 @@ $$('[data-role]').forEach(b => b.onclick = () => {
   if (isApp) N.btStop();
   link = {state:'idle', detail:''};
   cues.reset();
-  if (role === 'display') S = Object.assign({car:'', inAt:null, dur:30, adj:0, voice:true}, ls.get('state', {}));
+  if (role === 'display') S = Object.assign({car:'', planIn:null, inAt:null, dur:30, adj:0, voice:true}, ls.get('state', {}));
   startLink();
   showCtl(role === 'display');
   if (role === 'remote' && isApp && !remoteAddr) showDevices();
