@@ -26,36 +26,36 @@ button:disabled{opacity:.35}
 @font-face{font-family:"Barlow C";src:url(fonts/BarlowCondensed-800.woff2) format("woff2");font-weight:800}
 
 /* ===== 表示画面（計時モニター風） ===== */
-#disp{position:fixed;inset:0;display:grid;grid-template-rows:9vmin 1fr 1.5fr;gap:1.4vmin;padding:0 1.6vmin 1.6vmin;
+#disp{--lz:1;--pd:0px;position:fixed;inset:var(--pd);display:grid;grid-template-rows:calc(9vmin*var(--lz)) 1fr var(--f1,1.5fr);gap:1.4vmin;padding:0 1.6vmin 1.6vmin;
   background:#050607;background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.018) 0 2px,transparent 2px 6px)}
-#disp.svc{grid-template-rows:9vmin 1fr 1.9fr}      /* サービス中は「OUTまで」を大きく */
+#disp.svc{grid-template-rows:calc(9vmin*var(--lz)) 1fr var(--f2,1.9fr)}      /* サービス中は「OUTまで」を大きく */
 #top{margin:0 -1.6vmin;padding:0 2vmin;display:flex;align-items:center;gap:2vmin;border-bottom:2px solid var(--accent);
   background:linear-gradient(#121418,#0a0b0d);min-width:0}
-#top .no{font:800 6vmin/1 "Barlow C",sans-serif;background:var(--accent);color:#000;padding:.5vmin 1.6vmin;border-radius:.6vmin}
+#top .no{font:800 calc(6vmin*var(--lz))/1 "Barlow C",sans-serif;background:var(--accent);color:#000;padding:.5vmin 1.6vmin;border-radius:.6vmin}
 #top .no:empty{display:none}
-#top .ttl{font:700 4.4vmin/1 "Barlow C","Noto Sans JP",sans-serif;letter-spacing:.06em;white-space:nowrap}
+#top .ttl{font:700 calc(4.4vmin*var(--lz))/1 "Barlow C","Noto Sans JP",sans-serif;letter-spacing:.06em;white-space:nowrap}
 #top .sp{flex:1}
 #top .bdg{font:700 2.4vmin/1 "Noto Sans JP",sans-serif;border:1px solid currentColor;border-radius:.5vmin;padding:.5vmin 1vmin;white-space:nowrap}
 #dLink{color:var(--dim)} #dLink.on{color:var(--ok)} #dLink.err{color:var(--bad)}
 #dTime{color:var(--dim)} #dTime.gps{color:var(--ok)}
 #dBat{color:var(--dim)} #dBat.low{color:#fff;background:var(--bad);border-color:var(--bad);animation:blink 1s steps(2) infinite}
-#dLogo{height:6vmin;width:auto;flex:none;margin-left:.6vmin}
-#dClock{font-size:4.6vmin;font-weight:800;font-variant-numeric:tabular-nums;color:#d8dee4;white-space:nowrap}
+#dLogo{height:calc(6vmin*var(--lz));width:auto;flex:none;margin-left:.6vmin}
+#dClock{font-size:calc(4.6vmin*var(--lz));font-weight:800;font-variant-numeric:tabular-nums;color:#d8dee4;white-space:nowrap}
 #io{display:grid;grid-template-columns:1fr 1fr;gap:1.6vmin;min-height:0}
 #io.single{grid-template-columns:1fr}
 .cell{position:relative;min-height:0;border:1px solid #2a2e35;border-radius:1vmin;background:#0b0d10;overflow:hidden}
-.cell .lab{position:absolute;left:2vmin;top:1.2vmin;z-index:1;font:700 3.4vmin/1 "Barlow C","Noto Sans JP",sans-serif;letter-spacing:.1em;color:var(--accent)}
-.box{position:absolute;left:1.5vmin;right:1.5vmin;top:4.6vmin;bottom:1.2vmin}
+.cell .lab{position:absolute;left:2vmin;top:1.2vmin;z-index:1;font:700 calc(3.4vmin*var(--lz))/1 "Barlow C","Noto Sans JP",sans-serif;letter-spacing:.1em;color:var(--accent)}
+.box{position:absolute;left:1.5vmin;right:1.5vmin;top:calc(4.6vmin*var(--lz));bottom:1.2vmin}
 .fit{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;white-space:nowrap;line-height:1;color:#eef2f6}
 .fit .sg{position:relative;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em}   /* 大きい数字は端末の太字（元のデザイン） */
 /* サービス中の「サービスOUT」はラベル左・数字右の横長 */
-#io.single .cell .lab{top:50%;transform:translateY(-50%);font-size:4.2vmin}
-#io.single .box{left:24vmin;right:24vmin;top:1.6vmin;bottom:1.6vmin}
+#io.single .cell .lab{top:50%;transform:translateY(-50%);font-size:calc(4.2vmin*var(--lz))}
+#io.single .box{left:calc(24vmin*var(--lz));right:calc(24vmin*var(--lz));top:1.6vmin;bottom:1.6vmin}
 
 /* 「OUTまで」の枠：背景色で状態を出す（黄は黒文字） */
 #rem{transition:background-color .4s}
-#rem .lab{color:#fff;font-size:8vmin;top:1.4vmin}
-#rem .box{top:10vmin;bottom:5.4vmin}
+#rem .lab{color:#fff;font-size:calc(8vmin*var(--lz));top:1.4vmin}
+#rem .box{top:calc(1.4vmin + 8.6vmin*var(--lz));bottom:5.4vmin}
 #hint{position:absolute;right:2vmin;top:1.4vmin;font-size:2.4vmin;color:rgba(255,255,255,.55)}
 /* OUTを過ぎたら下の枠に「サービス作業完了」ボタン */
 #bDone{position:absolute;left:3vmin;right:3vmin;bottom:2.4vmin;height:15vmin;border-radius:1.4vmin;background:#fff;color:#c00;
@@ -89,13 +89,13 @@ button:disabled{opacity:.35}
 /* 夜間モード：画面全体を暗く */
 body.night #disp{filter:brightness(.6)}
 @media (orientation:portrait){
-  #disp{grid-template-rows:9vmin 1fr 1fr 1.6fr}
+  #disp{grid-template-rows:calc(9vmin*var(--lz)) 1fr 1fr var(--f3,1.6fr)}
   #io{grid-template-columns:1fr;grid-row:2/4}
   #io.single #cellOut{grid-row:1/3}
-  #disp.svc{grid-template-rows:9vmin .7fr .7fr 2fr}
-  #io.single .cell .lab{top:1.2vmin;transform:none;font-size:3.4vmin}
-  #io.single .box{left:1.5vmin;right:1.5vmin;top:4.6vmin}
-  #top .ttl{font-size:3.6vmin}
+  #disp.svc{grid-template-rows:calc(9vmin*var(--lz)) .7fr .7fr var(--f4,2fr)}
+  #io.single .cell .lab{top:1.2vmin;transform:none;font-size:calc(3.4vmin*var(--lz))}
+  #io.single .box{left:1.5vmin;right:1.5vmin;top:calc(4.6vmin*var(--lz))}
+  #top .ttl{font-size:calc(3.6vmin*var(--lz))}
   /* 縦向きは幅が狭いので帯の札は電池の警告だけ残す */
   #dLink,#dTime,#dBat:not(.low){display:none}
   #top{gap:1.6vmin}
@@ -131,12 +131,24 @@ body.night #disp{filter:brightness(.6)}
 
 /* ===== テンキー・シート ===== */
 .sheet{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:flex-end;justify-content:center;z-index:10}
-.sheet .in{background:var(--panel);width:100%;max-width:520px;border-radius:18px 18px 0 0;padding:16px;display:flex;flex-direction:column;gap:12px;max-height:92vh;overflow-y:auto}
+.sheet .in{background:var(--panel);width:100%;max-width:520px;border-radius:18px 18px 0 0;padding:16px;display:flex;flex-direction:column;gap:12px;max-height:92vh;max-height:96dvh;overflow-y:auto;
+  padding-bottom:max(16px,env(safe-area-inset-bottom))}
 .sheet .ttl{font-size:16px;color:var(--dim)}
-#kpVal{font-size:52px;text-align:center;padding:6px;border:2px solid var(--line);border-radius:12px;min-height:76px}
+#kpVal{font-size:clamp(30px,7dvh,52px);text-align:center;padding:4px;border:2px solid var(--line);border-radius:12px;min-height:clamp(46px,10dvh,76px)}
 #kpVal .ph{color:#444}
-.keys{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.keys button{min-height:64px;font-size:30px;font-weight:700}
+.keys{display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(6px,1.2dvh,10px)}
+.keys button{min-height:clamp(42px,9.5dvh,64px);font-size:clamp(22px,4.5dvh,30px);font-weight:700}
+#kp .in>.mid{min-height:clamp(42px,7dvh,60px)}
+/* 高さが足りない時（横向きのスマホ）は、入力欄を左・テンキーを右に */
+@media (max-height:520px) and (orientation:landscape){
+  #kp{align-items:center}
+  #kp .in{max-width:760px;border-radius:18px;display:grid;grid-template-columns:1fr 1.3fr;grid-template-rows:auto 1fr auto;column-gap:16px;row-gap:8px;padding:12px}
+  #kpTtl{grid-column:1;grid-row:1}
+  #kpVal{grid-column:1;grid-row:2;align-self:center}
+  #kp .in>.mid{grid-column:1;grid-row:3}
+  #kp .keys{grid-column:2;grid-row:1/4}
+  #kp .keys button{min-height:clamp(38px,19dvh,64px)}
+}
 #devList button{display:block;width:100%;text-align:left;padding:16px;font-size:18px;margin-bottom:8px}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#333;color:#fff;padding:12px 18px;border-radius:12px;font-size:16px;z-index:20;max-width:90vw;display:flex;gap:14px;align-items:center}
 #toast button{padding:8px 12px;background:var(--accent);color:#000;font-weight:700}
@@ -204,7 +216,7 @@ body.night #disp{filter:brightness(.6)}
       <div class="mid num" id="adjV" style="display:flex;align-items:center;justify-content:center"></div>
       <button class="mid" data-cmd='{"c":"adj","v":1000}'>＋1秒</button>
     </div>
-    <button class="mid danger" id="bReset" style="width:100%;margin-top:16px">長押しでリセット（IN予定・IN・OUTを消す）</button>
+    <button class="mid danger" id="bReset" style="width:100%;margin-top:16px">リセット（IN予定・IN・OUTを消す）</button>
   </div>
 
   <h2>設定</h2>
@@ -226,6 +238,12 @@ body.night #disp{filter:brightness(.6)}
     <button data-maxvol="1">ON</button><button data-maxvol="0">OFF</button></span></div>
   <div class="set" id="setBright"><span>画面の明るさ</span><span class="opts">
     <button data-bright="max">最大</button><button data-bright="auto">端末のまま</button><button data-bright="night">夜間</button></span></div>
+  <div class="set" id="setFitRow"><span>表示の調整（この端末だけ）<br><span class="note">下の「OUTまで」の枠の大きさ</span></span><span class="opts">
+    <button data-rr="0.75">小</button><button data-rr="1">標準</button><button data-rr="1.35">大</button><button data-rr="1.8">特大</button></span></div>
+  <div class="set" id="setLz"><span>帯と見出しの文字<br><span class="note">上の帯・SERVICE OUTまで などの大きさ</span></span><span class="opts">
+    <button data-lz="0.8">小</button><button data-lz="1">標準</button><button data-lz="1.25">大</button></span></div>
+  <div class="set" id="setPd"><span>画面の端の余白<br><span class="note">マウントの爪や画面の角で隠れる時に</span></span><span class="opts">
+    <button data-pd="0">なし</button><button data-pd="2">小</button><button data-pd="4">大</button></span></div>
   <div class="note" id="roleNote"></div>
   <div class="note" id="ver"></div>
 </div>
@@ -256,7 +274,7 @@ body.night #disp{filter:brightness(.6)}
 
 <script>
 'use strict';
-const VERSION = '0.7.5';
+const VERSION = '0.7.6';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const N = window.ST || null;                 // アプリ版の橋渡し（ブラウザでは無し）
@@ -285,6 +303,13 @@ let joinCode = ls.get('join', null);       // リモコン側：つなぐ表示�
 let ori = ls.get('ori', 'any');
 let gpsUse = ls.get('gps', true);
 let bright = ls.get('bright', 'max');
+// 表示の調整（端末ごとに保存・リモコンとは同期しない）
+let view = Object.assign({rr:'1', lz:'1', pd:'0'}, ls.get('view', {}));
+function applyView(){
+  const d = $('#disp').style;
+  [1.5, 1.9, 1.6, 2].forEach((f, i) => d.setProperty('--f' + (i + 1), (f * view.rr) + 'fr')); d.setProperty('--lz', view.lz); d.setProperty('--pd', view.pd + 'vmin');
+  requestAnimationFrame(fitAll);
+}
 let maxVol = ls.get('maxvol', true);
 let voiceSel = ls.get('voice', null);     // 声のID（VOICEVOXの話者ID）／'tts'＝端末の音声
 let remoteAddr = ls.get('addr', null);
@@ -780,6 +805,8 @@ function render(full){
   $$('[data-ori]').forEach(b => b.classList.toggle('sel', b.dataset.ori === ori));
   $$('[data-gps]').forEach(b => b.classList.toggle('sel', (b.dataset.gps === '1') === gpsUse));
   $$('[data-bright]').forEach(b => b.classList.toggle('sel', b.dataset.bright === bright));
+  ['rr', 'lz', 'pd'].forEach(k => $$('[data-' + k + ']').forEach(b => b.classList.toggle('sel', b.dataset[k] === view[k])));
+  ['#setFitRow', '#setLz', '#setPd'].forEach(id => $(id).classList.toggle('hide', role !== 'display'));
   $$('[data-maxvol]').forEach(b => b.classList.toggle('sel', (b.dataset.maxvol === '1') === maxVol));
   $('#setMaxVol').classList.toggle('hide', !isApp || role !== 'display');
   $$('[data-voice]').forEach(b => b.classList.toggle('sel', b.dataset.voice === voiceSel));
@@ -933,13 +960,14 @@ $('#bCar').onclick = () => kp.open('car', 'ゼッケン（空でOKを押すと�
 $('#bVoice').onclick = () => act({c:'voice', v: !S.voice});
 $('#bTest').onclick = () => act({c:'test'});
 
-// リセットは長押し（1秒）
+// リセットは誤操作よけに2回押し（1回目で「もう一度押すとリセット」→4秒以内にもう一度）
 (() => {
-  const b = $('#bReset'); let tm;
-  const start = e => { e.preventDefault(); b.style.filter = 'brightness(1.6)'; tm = setTimeout(() => { b.style.filter = ''; act({c:'reset'}); vib(80); }, 1000); };
-  const stop = () => { clearTimeout(tm); b.style.filter = ''; };
-  b.addEventListener('pointerdown', start);
-  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, stop));
+  const b = $('#bReset'), txt = b.textContent; let armed = null;
+  const disarm = () => { clearTimeout(armed); armed = null; b.textContent = txt; b.style.background = ''; b.style.color = ''; };
+  b.onclick = () => {
+    if (!armed){ b.textContent = 'もう一度押すとリセット'; b.style.background = 'var(--bad)'; b.style.color = '#fff'; vib(30); armed = setTimeout(disarm, 4000); return; }
+    disarm(); act({c:'reset'}); vib(80); toast('リセットしました');
+  };
 })();
 
 $$('[data-role]').forEach(b => b.onclick = () => {
@@ -965,6 +993,10 @@ $$('[data-gps]').forEach(b => b.onclick = () => { gpsUse = b.dataset.gps === '1'
 $('[data-voice="tts"]').onclick = () => { voiceSel = 'tts'; ls.set('voice', voiceSel); render(true); };
 $$('[data-maxvol]').forEach(b => b.onclick = () => { maxVol = b.dataset.maxvol === '1'; ls.set('maxvol', maxVol); boostVolume(); render(true); });
 $$('[data-bright]').forEach(b => b.onclick = () => { bright = b.dataset.bright; ls.set('bright', bright); applyBright(); render(true); });
+['rr', 'lz', 'pd'].forEach(k => $$('[data-' + k + ']').forEach(b => b.onclick = () => {
+  view[k] = b.dataset[k]; ls.set('view', view); applyView(); render(true);
+  toast('閉じると表示に反映されます');
+}));
 /** GPS時刻の受信は「表示する端末」でONの時だけ（リモコンは表示端末の時計に合わせる） */
 function applyGps(){ if (isApp) N.gpsClock(role === 'display' && gpsUse); }
 /** 明るさ：最大＝屋外向け／端末のまま／夜間＝暗くして画面も落ち着いた色に */
@@ -994,6 +1026,7 @@ boostVolume();
 if (!isApp && 'serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(() => {});
 applyOri();
 applyBright();
+applyView();
 applyGps();
 keepAwake();
 startLink();
