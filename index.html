@@ -129,6 +129,17 @@ body.night #disp{filter:brightness(.6)}
 #ctlClose{position:sticky;top:0;z-index:2}
 .disabled{opacity:.35;pointer-events:none}
 
+/* 操作パネルの完了ボタン（長押し）：押している間、左から色が満ちる */
+#bDone2{position:relative;width:100%;min-height:110px;margin:4px 0 6px;border-radius:16px;background:#fff;color:#c00;
+  font-size:clamp(26px,8vw,40px);font-weight:900;overflow:hidden;touch-action:none;-webkit-touch-callout:none;box-shadow:0 5px 0 rgba(0,0,0,.35)}
+#bDone2::before{content:"";position:absolute;inset:0;background:#c00;transform:scaleX(0);transform-origin:left;transition:transform .15s}
+#bDone2.holding::before{transform:scaleX(1);transition:transform 1s linear}
+#bDone2 span{position:relative;transition:color .15s;display:flex;flex-direction:column;align-items:center;gap:4px;line-height:1.1}
+#bDone2 small{font-size:17px;font-weight:700;letter-spacing:.1em}
+#bDone2.holding span{color:#fff;transition:color .5s .3s}
+#bDone2.late{animation:bgblink3 1s steps(2) infinite}
+@keyframes bgblink3{50%{background:#ffd6d6}}
+
 /* ===== リモコン：OUTを過ぎたら出る「サービス作業完了」 ===== */
 #donePop{position:fixed;inset:0;z-index:9;background:rgba(120,0,0,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:20px;text-align:center}
 #donePop .t1{font-size:clamp(22px,5vmin,40px);font-weight:800;color:#fff}
@@ -193,8 +204,8 @@ body.night #disp{filter:brightness(.6)}
   </div>
 
   <div id="ops">
+    <button class="hide" id="bDone2"><span><small>長押しで</small>サービス作業完了</span></button>
     <h2>IN予定（この時刻になると自動でサービスINに切り替わる）</h2>
-    <button class="big danger hide" id="bDone2" style="width:100%;background:#fff;color:#c00;margin-bottom:12px">サービス作業完了</button>
     <button class="big go" id="bPlanKey" style="width:100%">IN予定を入力</button>
     <div class="row" style="margin-top:10px">
       <button class="mid" data-cmd='{"c":"planAdj","v":-1}'>予定 −1分</button>
@@ -290,7 +301,7 @@ body.night #disp{filter:brightness(.6)}
 
 <script>
 'use strict';
-const VERSION = '0.7.10';
+const VERSION = '0.7.11';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const N = window.ST || null;                 // アプリ版の橋渡し（ブラウザでは無し）
@@ -779,7 +790,8 @@ function render(full){
     requestAnimationFrame(fitAll);
   }
   $('#rem').classList.toggle('has-done', showDone);
-  $('#bDone2').classList.toggle('hide', !showDone);
+  $('#bDone2').classList.toggle('hide', !single);
+  $('#bDone2').classList.toggle('late', showDone);
   // リモコンは画面いっぱいのポップアップでも出す（「あとで」で閉じたらそのサービスの間は出さない）
   const pop = role === 'remote' && showDone && popClosedFor !== S.inAt;
   $('#donePop').classList.toggle('hide', !pop);
@@ -821,6 +833,9 @@ function render(full){
   $('#ops').classList.toggle('disabled', role === 'remote' && link.state !== 'connected');
   $$('#durs button').forEach(b => b.classList.toggle('sel', +b.dataset.v === S.dur || (b.dataset.v === 'x' && !DURS.includes(S.dur))));
   const bx = $('#durs button[data-v="x"]'); bx.textContent = DURS.includes(S.dur) ? 'その他' : S.dur + '分';
+  const entered = S.planIn != null || S.inAt != null;
+  $('#bPlanKey').textContent = entered ? 'IN時間を修正' : 'IN予定を入力';
+  $('#bPlanKey').classList.toggle('go', !entered);
   $('#bCar').textContent = S.car ? 'ゼッケン ' + S.car : 'ゼッケン';
   $('#bVoice').textContent = '読み上げ ' + (S.voice ? 'ON' : 'OFF');
   $('#bVoice').classList.toggle('sel', S.voice);
@@ -962,17 +977,32 @@ $('#disp').addEventListener('click', () => showCtl(true));
 $('#ctlClose').onclick = () => showCtl(false);
 $('#bIn').onclick = () => act({c:'in'});
 $('#bDone').addEventListener('click', e => { e.stopPropagation(); act({c:'done'}); });
-$('#bDone2').onclick = () => { if (act({c:'done'})) toast('お疲れさまでした'); };
+// 長押し（1秒）で完了。指が少し動いてもスクロール扱いにならないよう touch-action:none ＋ポインターを捕まえる
+(() => {
+  const b = $('#bDone2'); let tm = null;
+  const stop = () => { clearTimeout(tm); tm = null; b.classList.remove('holding'); };
+  b.addEventListener('pointerdown', e => {
+    e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch(_) {}
+    b.classList.add('holding'); vib(20);
+    tm = setTimeout(() => { stop(); if (act({c:'done'})){ vib(120); toast('お疲れさまでした'); } }, 1000);
+  });
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => b.addEventListener(ev, stop));
+  b.addEventListener('contextmenu', e => e.preventDefault());
+  b.addEventListener('click', () => { if (!tm) toast('長押ししてください'); });
+})();
 $('#fin').addEventListener('click', e => e.stopPropagation());
 $('#donePopBtn').onclick = () => { if (act({c:'done'})){ $('#donePop').classList.add('hide'); toast('お疲れさまでした'); } };
 $('#donePopLater').onclick = () => { popClosedFor = S.inAt; render(true); };
 $$('[data-cmd]').forEach(b => b.onclick = () => act(JSON.parse(b.dataset.cmd)));
-$('#bPlanKey').onclick = () => kp.open('time', 'IN予定時刻（時・分の4桁　例：0930）', v => {
-  if (v.length !== 4) { toast('4桁で入力してください'); return false; }
-  const h = +v.slice(0, 2), m = +v.slice(2);
-  if (h > 23 || m > 59) { toast('時刻が正しくありません'); return false; }
-  act({c:'planAt', h, m});
-});
+$('#bPlanKey').onclick = () => {
+  const isIn = S.inAt != null;
+  kp.open('time', (isIn ? 'IN時刻の修正' : S.planIn != null ? 'IN予定時刻の修正' : 'IN予定時刻') + '（時・分の4桁　例：0930）', v => {
+    if (v.length !== 4) { toast('4桁で入力してください'); return false; }
+    const h = +v.slice(0, 2), m = +v.slice(2);
+    if (h > 23 || m > 59) { toast('時刻が正しくありません'); return false; }
+    act(isIn ? {c:'inAt', h, m} : {c:'planAt', h, m});
+  });
+};
 $('#bInKey').onclick = () => kp.open('time', 'IN時刻（時・分の4桁　例：0930）', v => {
   if (v.length !== 4) { toast('4桁で入力してください'); return false; }
   const h = +v.slice(0, 2), m = +v.slice(2);
