@@ -71,7 +71,7 @@ button:disabled{opacity:.35}
 #prog{position:absolute;left:2vmin;right:2vmin;bottom:2vmin;height:1.6vmin;border-radius:1vmin;background:rgba(0,0,0,.35)}
 #prog i{position:absolute;left:0;top:0;bottom:0;border-radius:1vmin;background:#fff;transition:width .5s linear}
 #prog .tk{position:absolute;top:-.8vmin;bottom:-.8vmin;width:2px;background:rgba(255,255,255,.55)}
-#disp.idle #rem .fit{color:#59616b}
+#disp.idle #rem .fit{color:#d8dee4}
 #disp.pre #rem{background:#1565c0;border-color:#1565c0}
 #disp.run #rem{background:#1b7a3a;border-color:#1b7a3a}
 #disp.warn #rem{background:#ffc400;border-color:#ffc400}
@@ -128,6 +128,14 @@ body.night #disp{filter:brightness(.6)}
 .note{font-size:13px;color:var(--dim);line-height:1.6}
 #ctlClose{position:sticky;top:0;z-index:2}
 .disabled{opacity:.35;pointer-events:none}
+
+/* ===== リモコン：OUTを過ぎたら出る「サービス作業完了」 ===== */
+#donePop{position:fixed;inset:0;z-index:9;background:rgba(120,0,0,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:20px;text-align:center}
+#donePop .t1{font-size:clamp(22px,5vmin,40px);font-weight:800;color:#fff}
+#donePop .t2{font-size:clamp(40px,14vmin,110px);font-weight:900;color:#fff;font-variant-numeric:tabular-nums;line-height:1}
+#donePop .go2{width:100%;max-width:560px;min-height:clamp(110px,26vmin,200px);border-radius:20px;background:#fff;color:#c00;
+  font-size:clamp(30px,9vmin,64px);font-weight:900;box-shadow:0 6px 0 rgba(0,0,0,.35)}
+#donePop .later{padding:12px 26px;font-size:17px;background:rgba(255,255,255,.18);color:#fff}
 
 /* ===== テンキー・シート ===== */
 .sheet{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:flex-end;justify-content:center;z-index:10}
@@ -248,6 +256,14 @@ body.night #disp{filter:brightness(.6)}
   <div class="note" id="ver"></div>
 </div>
 
+<!-- リモコン：OUTを過ぎたら -->
+<div id="donePop" class="hide">
+  <div class="t1">SERVICE OUT 超過</div>
+  <div class="t2" id="donePopT"></div>
+  <button class="go2" id="donePopBtn">サービス作業完了</button>
+  <button class="later" id="donePopLater">あとで（閉じる）</button>
+</div>
+
 <!-- テンキー -->
 <div class="sheet hide" id="kp"><div class="in">
   <div class="ttl" id="kpTtl"></div>
@@ -274,7 +290,7 @@ body.night #disp{filter:brightness(.6)}
 
 <script>
 'use strict';
-const VERSION = '0.7.7';
+const VERSION = '0.7.8';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const N = window.ST || null;                 // アプリ版の橋渡し（ブラウザでは無し）
@@ -701,6 +717,7 @@ setInterval(() => {
 
 // ---------------- 画面 ----------------
 let ctlOpen = false;
+let popClosedFor = null;      // リモコン：完了ポップアップを「あとで」で閉じたサービス（IN時刻）
 
 function linkText(){
   const s = link.state, d = link.detail;
@@ -723,8 +740,8 @@ function linkText(){
 
 function render(full){
   const t = now(), ph = phase(t), o = outAt();
-  const remTxt = ph.p === 'idle' ? '--:--' : (ph.p === 'late' || ph.p === 'wait') ? '+' + dur(ph.r) : dur(ph.r);
-  const remLab = {idle:'IN予定待ち', pre:'サービスINまで', wait:'IN予定を過ぎています（到着したらIN）',
+  const remTxt = ph.p === 'idle' ? hms(t) : (ph.p === 'late' || ph.p === 'wait') ? '+' + dur(ph.r) : dur(ph.r);
+  const remLab = {idle:'IN予定待ち　現在時刻', pre:'サービスINまで', wait:'IN予定を過ぎています（到着したらIN）',
     run:'SERVICE OUTまで', late:'超過'}[ph.p];
   const cls = ph.p === 'idle' ? 'idle' : ph.p === 'pre' ? 'pre' : ph.p === 'wait' ? 'wait' : ph.p === 'out' ? 'out' : ph.p === 'late' ? 'late'
     : ph.r <= 60000 ? 'bad' : ph.r <= 300000 ? 'warn' : '';
@@ -763,6 +780,10 @@ function render(full){
   }
   $('#rem').classList.toggle('has-done', showDone);
   $('#bDone2').classList.toggle('hide', !showDone);
+  // リモコンは画面いっぱいのポップアップでも出す（「あとで」で閉じたらそのサービスの間は出さない）
+  const pop = role === 'remote' && showDone && popClosedFor !== S.inAt;
+  $('#donePop').classList.toggle('hide', !pop);
+  if (pop) $('#donePopT').textContent = '+' + dur(ph.r);
   $('#fin').classList.toggle('hide', !(S.doneAt && t - S.doneAt < 5000 && role === 'display'));
   const showProg = single && ph.p === 'run';
   $('#prog').classList.toggle('hide', !showProg);
@@ -788,7 +809,7 @@ function render(full){
   $('#mOut').textContent = outT == null ? '--:--' : hm(outT);
   $('#mInLab').textContent = planned ? 'IN予定' : 'IN'; $('#mOutLab').textContent = planned ? 'OUT予定' : 'OUT';
   $('#mRem').textContent = remTxt;
-  $('#mRemLab').textContent = ph.p === 'idle' ? 'IN待ち' : ph.p === 'wait' ? 'IN予定から' : remLab.replace(/（.*/, '');
+  $('#mRemLab').textContent = ph.p === 'idle' ? '現在時刻' : ph.p === 'wait' ? 'IN予定から' : remLab.replace(/（.*/, '');
   $('#mini').className = cls;
   if (!full && !ctlOpen) return;
 
@@ -942,6 +963,8 @@ $('#bIn').onclick = () => act({c:'in'});
 $('#bDone').addEventListener('click', e => { e.stopPropagation(); act({c:'done'}); });
 $('#bDone2').onclick = () => { if (act({c:'done'})) toast('お疲れさまでした'); };
 $('#fin').addEventListener('click', e => e.stopPropagation());
+$('#donePopBtn').onclick = () => { if (act({c:'done'})){ $('#donePop').classList.add('hide'); toast('お疲れさまでした'); } };
+$('#donePopLater').onclick = () => { popClosedFor = S.inAt; render(true); };
 $$('[data-cmd]').forEach(b => b.onclick = () => act(JSON.parse(b.dataset.cmd)));
 $('#bPlanKey').onclick = () => kp.open('time', 'IN予定時刻（時・分の4桁　例：0930）', v => {
   if (v.length !== 4) { toast('4桁で入力してください'); return false; }
