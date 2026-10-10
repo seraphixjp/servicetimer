@@ -274,7 +274,7 @@ body.night #disp{filter:brightness(.6)}
 
 <script>
 'use strict';
-const VERSION = '0.7.6';
+const VERSION = '0.7.7';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const N = window.ST || null;                 // アプリ版の橋渡し（ブラウザでは無し）
@@ -293,7 +293,7 @@ const roleFixed = params.get('role');        // ブラウザで2タブ試験す�
 let role = roleFixed || ls.get('role', 'display');
 // 状態の初期値（Firebase は null を保存しないので、受け取った状態は必ずこれに重ねる）
 const DEF = {car:'', planIn:null, inAt:null, inAuto:false, doneAt:null, dur:30, adj:0, voice:true};
-let S = Object.assign({}, DEF, ls.get('state', {}));
+let S = Object.assign({}, DEF, role === 'display' ? ls.get('state', {}) : {});
 let serveOn = ls.get('serve', false);
 // リモコンのつなぎ方：bt＝Bluetooth（アプリのみ）／net＝インターネット（Firebase）／local＝同じブラウザのタブ同士（試験用 ?via=local）
 let via = params.get('via') || (isApp ? ls.get('via', 'bt') : 'net');
@@ -348,10 +348,11 @@ function phase(t){
 function act(cmd){
   if (role === 'display') apply(cmd);
   else {
-    if (link.state !== 'connected') { toast('表示端末とつながっていません'); return; }
+    if (link.state !== 'connected') { toast('表示端末とつながっていません'); return false; }
     send({t:'cmd', cmd});
     vib(30);
   }
+  return true;
 }
 
 function apply(cmd){
@@ -361,16 +362,16 @@ function apply(cmd){
     case 'in':
       S.inAt = Math.floor(t / 60000) * 60000; S.inAuto = false;
       say = inOutSpeech(); break;
-    case 'inAt': S.inAt = atToday(t, cmd.h, cmd.m); S.inAuto = false; say = inOutSpeech(); break;
+    case 'inAt': S.inAt = atToday(t, cmd.h, cmd.m, 20); S.inAuto = false; say = inOutSpeech(); break;
     // 予定を直した時、自動で入ったINは取り消して予定からやり直す（予定がまだ先ならIN前に戻る）
-    case 'planAt': S.planIn = atToday(t, cmd.h, cmd.m); if (S.inAuto) S.inAt = null; say = autoIn(t, true) ? inOutSpeech() : planSpeech(); break;
+    case 'planAt': S.planIn = atToday(t, cmd.h, cmd.m, 3); if (S.inAuto) S.inAt = null; say = autoIn(t, true) ? inOutSpeech() : planSpeech(); break;
     case 'planAdj': if (S.planIn != null){ S.planIn += cmd.v * 60000; if (S.inAuto) S.inAt = null; say = autoIn(t, true) ? inOutSpeech() : planSpeech(); } break;
     case 'inAdj': if (S.inAt != null){ S.inAt += cmd.v * 60000; S.inAuto = false; say = inOutSpeech(); } break;
     case 'dur': S.dur = cmd.v; say = S.inAt != null ? inOutSpeech() : 'サービス時間は、' + cmd.v + '分です。'; break;
     case 'car': S.car = cmd.v; break;
     case 'voice': S.voice = cmd.v; if (cmd.v) say = '読み上げをオンにしました。'; break;
     case 'adj': S.adj += cmd.v; break;
-    case 'reset': S.inAt = null; S.planIn = null; S.inAuto = false; say = 'リセットしました。'; break;
+    case 'reset': S.inAt = null; S.planIn = null; S.inAuto = false; S.doneAt = null; say = 'リセットしました。'; break;
     // サービス作業完了：お疲れさまでしたを出して、最初の画面（IN予定待ち）に戻す
     case 'done': S.inAt = null; S.planIn = null; S.inAuto = false; S.doneAt = t; say = 'お疲れさまでした。'; break;
     case 'test': {   // 押すたびに音を順番に試す
@@ -387,12 +388,12 @@ function apply(cmd){
   pushState();
 }
 
-/** 今日のh:m（12時間以上離れていれば前日・翌日とみなす） */
-function atToday(t, h, m){
+/** h:m を日時に。back＝何時間前までを過去とみなすか（それより前なら翌日）、残りは未来（それより先なら前日） */
+function atToday(t, h, m, back = 12){
   const d = new Date(t); d.setHours(h, m, 0, 0);
   let v = d.getTime();
-  if (v - t > 12 * 3600000) v -= 86400000;
-  if (t - v > 12 * 3600000) v += 86400000;
+  if (t - v > back * 3600000) v += 86400000;
+  if (v - t > (24 - back) * 3600000) v -= 86400000;
   return v;
 }
 /** 読み上げ用の時刻を部品で：「18時」＋「12分です。」／「10時」＋「ちょうどです。」（録音した音声をつなげるため） */
@@ -465,7 +466,7 @@ const VOICE = {packs:[], map:{}, buf:{}, id:null, ready:false};
 async function loadVoice(){
   try {
     if (!VOICE.packs.length){
-      VOICE.packs = await (await fetch('voice/packs.json')).json();
+      VOICE.packs = await (await fetch('voice/packs.json', {cache:'no-cache'})).json();
       $('#voiceOpts').innerHTML = VOICE.packs.map(p => `<button data-voice="${p.id}">${p.label}</button>`).join('');
       $$('[data-voice]').forEach(b => b.onclick = () => { voiceSel = b.dataset.voice; ls.set('voice', voiceSel); loadVoice(); render(true); });
     }
@@ -473,7 +474,10 @@ async function loadVoice(){
     if (voiceSel === 'tts' || VOICE.id === voiceSel){ render(true); return; }
     const id = voiceSel;
     VOICE.ready = false; VOICE.map = {}; VOICE.buf = {};
-    const j = await (await fetch('voice/' + id + '/phrases.json')).json();
+    const res = await fetch('voice/' + id + '/phrases.json', {cache:'no-cache'});
+    // 選んでいた声が無くなっていたら（声の入れ替え後など）先頭の声に戻す
+    if (!res.ok){ if (id !== VOICE.packs[0].id){ voiceSel = VOICE.packs[0].id; ls.set('voice', voiceSel); return loadVoice(); } throw new Error('voice'); }
+    const j = await res.json();
     ac();
     const map = {}, buf = {};
     await Promise.all(j.phrases.map(async p => {
@@ -653,11 +657,12 @@ window.__gpsOffset = ms => {
 const batLow = () => bat.level != null && bat.level <= 20 && !bat.charging;
 let batSaid = 100;
 window.__battery = (level, charging) => {
+  if (role !== 'display') return;      // リモコンの電池表示は表示端末から届いた値
   bat = {level, charging};
   if (charging) batSaid = 100;
   else if (role === 'display'){
     const mark = level <= 10 ? 10 : level <= 20 ? 20 : 100;
-    if (mark < batSaid){ batSaid = mark; speak('この端末の電池が、残り' + mark + 'パーセントです。充電してください。', 'urgent'); }
+    if (mark < batSaid){ batSaid = mark; if (S.voice) speak('この端末の電池が、残り' + mark + 'パーセントです。充電してください。', 'urgent'); }
   }
   render(true);
 };
@@ -688,6 +693,9 @@ setInterval(() => {
   if (role === 'display') pushState();
   else if (via === 'local'){
     if (Date.now() - lastStateAt > 20000){ link = {state:'connecting', detail:''}; send({t:'hello'}); render(); }
+  }
+  else if (via === 'net' && link.state === 'connected' && Date.now() - lastStateAt > 30000){
+    link = {state:'error', detail:'表示端末から応答がありません（電源・電波を確認）'}; render(true);
   }
 }, 10000);
 
@@ -932,7 +940,7 @@ $('#disp').addEventListener('click', () => showCtl(true));
 $('#ctlClose').onclick = () => showCtl(false);
 $('#bIn').onclick = () => act({c:'in'});
 $('#bDone').addEventListener('click', e => { e.stopPropagation(); act({c:'done'}); });
-$('#bDone2').onclick = () => { act({c:'done'}); toast('お疲れさまでした'); };
+$('#bDone2').onclick = () => { if (act({c:'done'})) toast('お疲れさまでした'); };
 $('#fin').addEventListener('click', e => e.stopPropagation());
 $$('[data-cmd]').forEach(b => b.onclick = () => act(JSON.parse(b.dataset.cmd)));
 $('#bPlanKey').onclick = () => kp.open('time', 'IN予定時刻（時・分の4桁　例：0930）', v => {
@@ -966,7 +974,7 @@ $('#bTest').onclick = () => act({c:'test'});
   const disarm = () => { clearTimeout(armed); armed = null; b.textContent = txt; b.style.background = ''; b.style.color = ''; };
   b.onclick = () => {
     if (!armed){ b.textContent = 'もう一度押すとリセット'; b.style.background = 'var(--bad)'; b.style.color = '#fff'; vib(30); armed = setTimeout(disarm, 4000); return; }
-    disarm(); act({c:'reset'}); vib(80); toast('リセットしました');
+    disarm(); if (act({c:'reset'})){ vib(80); toast('リセットしました'); }
   };
 })();
 
@@ -977,7 +985,8 @@ $$('[data-role]').forEach(b => b.onclick = () => {
   if (isApp) N.btStop();
   link = {state:'idle', detail:''};
   cues.reset();
-  if (role === 'display') S = Object.assign({}, DEF, ls.get('state', {}));
+  S = Object.assign({}, DEF, role === 'display' ? ls.get('state', {}) : {});
+  lastStateAt = 0;
   startLink();
   applyGps();
   showCtl(role === 'display');
