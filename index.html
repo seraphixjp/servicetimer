@@ -236,7 +236,7 @@ body.night #disp{filter:brightness(.6)}
     <button data-via="bt">Bluetooth</button><button data-via="net">インターネット</button></span></div>
   <div class="set" id="setRoom"><span>接続コード<br><span class="note">リモコン側でこの6桁を入れる</span></span>
     <span class="opts" style="align-items:center"><b class="num" id="roomCode" style="font-size:34px;letter-spacing:.12em"></b><button id="roomNew">変える</button></span></div>
-  <div class="set"><span>画面の向き</span><span class="opts">
+  <div class="set" id="setOri"><span>画面の向き</span><span class="opts">
     <button data-ori="any">自動</button><button data-ori="landscape">横</button><button data-ori="portrait">縦</button></span></div>
   <div class="set" id="setGps"><span>時計をGPS時刻に合わせる<br><span class="note" id="gpsNote"></span></span><span class="opts">
     <button data-gps="1">ON</button><button data-gps="0">OFF</button></span></div>
@@ -290,7 +290,7 @@ body.night #disp{filter:brightness(.6)}
 
 <script>
 'use strict';
-const VERSION = '0.7.9';
+const VERSION = '0.7.10';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const N = window.ST || null;                 // アプリ版の橋渡し（ブラウザでは無し）
@@ -832,6 +832,7 @@ function render(full){
   $('#setRoom').classList.toggle('hide', !(role === 'display' && serveOn && via === 'net'));
   $('#roomCode').textContent = room;
   $$('[data-ori]').forEach(b => b.classList.toggle('sel', b.dataset.ori === ori));
+  $('#setOri').classList.toggle('hide', role !== 'display');
   $$('[data-gps]').forEach(b => b.classList.toggle('sel', (b.dataset.gps === '1') === gpsUse));
   $$('[data-bright]').forEach(b => b.classList.toggle('sel', b.dataset.bright === bright));
   ['rr', 'lz', 'pd'].forEach(k => $$('[data-' + k + ']').forEach(b => b.classList.toggle('sel', b.dataset[k] === view[k])));
@@ -1012,6 +1013,7 @@ $$('[data-role]').forEach(b => b.onclick = () => {
   lastStateAt = 0;
   startLink();
   applyGps();
+  applyOri();
   showCtl(role === 'display');
   if (role === 'remote' && via === 'bt' && !remoteAddr) showDevices();
   if (role === 'remote' && via === 'net' && !joinCode) askCode();
@@ -1036,9 +1038,13 @@ function applyBright(){
   document.body.classList.toggle('night', bright === 'night');
   if (isApp) N.setBrightness(bright === 'max' ? 1 : bright === 'night' ? 0.15 : -1);
 }
+/** 画面の向き。リモコンは手に持つので常に縦 */
 function applyOri(){
-  if (isApp) N.setOrientation(ori);
-  else if (screen.orientation && screen.orientation.lock && ori !== 'any') screen.orientation.lock(ori).catch(() => {});
+  const o = role === 'remote' ? 'portrait' : ori;
+  if (isApp) N.setOrientation(o);
+  else if (screen.orientation && screen.orientation.lock){
+    if (o !== 'any') screen.orientation.lock(o).catch(() => {}); else if (screen.orientation.unlock) try { screen.orientation.unlock(); } catch(e) {}
+  }
 }
 
 // ---------------- 起動 ----------------
