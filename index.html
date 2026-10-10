@@ -301,7 +301,7 @@ body.night #disp{filter:brightness(.6)}
 
 <script>
 'use strict';
-const VERSION = '0.7.12';
+const VERSION = '0.7.13';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const N = window.ST || null;                 // アプリ版の橋渡し（ブラウザでは無し）
@@ -452,10 +452,11 @@ const cues = {
     const ph = phase(t);
     let key = null, text = null, chime = null;
     if (ph.p === 'run' || ph.p === 'pre'){
-      // 残り秒数が区切り（T秒）以下になった時にTを読む。区切り＝10分より上は5分ごと・10/5/3/2/1分・30秒・10〜1秒
+      // 残り秒数が区切り（T秒）以下になった時にTを読む。区切り＝OUTは20分より上は10分ごと・IN前は10分より上は5分ごと・10/5/3/2/1分・30秒・10〜1秒
       const s = Math.ceil(ph.r / 1000);
       // IN前は分のお知らせだけ（車はその秒に着くわけではないので秒読みしない）
-      const T = MARKS.find(m => s <= m && (ph.p === 'run' || m >= 60));
+      // OUTまで20分より前は10分刻み（60・50・40・30・20分）、20分を切ったら15・10・5・3・2・1分…
+      const T = MARKS.find(m => s <= m && (ph.p === 'run' ? (m <= 1200 || m % 600 === 0) : m >= 60));
       const head = ph.p === 'pre' ? 'サービスインまで、あと' : 'アウトまで、あと';
       if (T == null) key = ph.p + 'x';
       else {
