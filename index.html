@@ -71,7 +71,7 @@ button:disabled{opacity:.35}
 #prog{position:absolute;left:2vmin;right:2vmin;bottom:2vmin;height:1.6vmin;border-radius:1vmin;background:rgba(0,0,0,.35)}
 #prog i{position:absolute;left:0;top:0;bottom:0;border-radius:1vmin;background:#fff;transition:width .5s linear}
 #prog .tk{position:absolute;top:-.8vmin;bottom:-.8vmin;width:2px;background:rgba(255,255,255,.55)}
-#disp.idle #rem .fit{color:#d8dee4}
+#disp.idle #rem .fit{color:var(--accent)}
 #disp.pre #rem{background:#1565c0;border-color:#1565c0}
 #disp.run #rem{background:#1b7a3a;border-color:#1b7a3a}
 #disp.warn #rem{background:#ffc400;border-color:#ffc400}
@@ -290,7 +290,7 @@ body.night #disp{filter:brightness(.6)}
 
 <script>
 'use strict';
-const VERSION = '0.7.8';
+const VERSION = '0.7.9';
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const N = window.ST || null;                 // アプリ版の橋渡し（ブラウザでは無し）
@@ -741,7 +741,7 @@ function linkText(){
 function render(full){
   const t = now(), ph = phase(t), o = outAt();
   const remTxt = ph.p === 'idle' ? hms(t) : (ph.p === 'late' || ph.p === 'wait') ? '+' + dur(ph.r) : dur(ph.r);
-  const remLab = {idle:'IN予定待ち　現在時刻', pre:'サービスINまで', wait:'IN予定を過ぎています（到着したらIN）',
+  const remLab = {idle:'現在時刻', pre:'サービスINまで', wait:'IN予定を過ぎています（到着したらIN）',
     run:'SERVICE OUTまで', late:'超過'}[ph.p];
   const cls = ph.p === 'idle' ? 'idle' : ph.p === 'pre' ? 'pre' : ph.p === 'wait' ? 'wait' : ph.p === 'out' ? 'out' : ph.p === 'late' ? 'late'
     : ph.r <= 60000 ? 'bad' : ph.r <= 300000 ? 'warn' : '';
